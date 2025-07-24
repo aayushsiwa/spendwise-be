@@ -1,0 +1,131 @@
+openapi: 3.0.3
+info:
+  title: Personal Finance Tracker API
+  description: API for managing personal finance records using Go + SQLite
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+
+paths:
+  /api/records:
+    get:
+      summary: Get all finance records
+      responses:
+        "200":
+          description: A list of records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Record"
+    post:
+      summary: Create a new finance record
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecordInput"
+      responses:
+        "201":
+          description: Created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Record"
+
+  /api/records/{id}:
+    put:
+      summary: Update a finance record
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecordInput"
+      responses:
+        "200":
+          description: Updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Record"
+    delete:
+      summary: Delete a finance record
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted successfully
+
+  /api/export/csv:
+    get:
+      summary: Export all records as CSV
+      responses:
+        "200":
+          description: CSV export
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+
+components:
+  schemas:
+    Record:
+      type: object
+      properties:
+        id:
+          type: integer
+        date:
+          type: string
+          format: date
+          example: 2025-07-24
+        description:
+          type: string
+        category:
+          type: string
+        amount:
+          type: number
+          format: float
+        type:
+          type: string
+          enum: [income, expense]
+        notes:
+          type: string
+
+    RecordInput:
+      type: object
+      required:
+        - date
+        - amount
+        - type
+      properties:
+        date:
+          type: string
+          format: date
+          example: 2025-07-24
+        description:
+          type: string
+        category:
+          type: string
+        amount:
+          type: number
+          format: float
+        type:
+          type: string
+          enum: [income, expense]
+        notes:
+          type: string
