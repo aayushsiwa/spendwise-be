@@ -7,27 +7,44 @@ import (
 
 	"aayushsiwa/expense-tracker/db"
 	"aayushsiwa/expense-tracker/secure"
+
+	"github.com/gin-gonic/gin"
 )
 
-func ExportCSV(w http.ResponseWriter, r *http.Request) {
-	rows, _ := db.DB.Query("SELECT date, description, category, amount, type, notes FROM records ORDER BY date DESC")
+func ExportCSV(c *gin.Context) {
+	rows, err := db.DB.Query("SELECT date, description, category, amount, type, notes FROM records ORDER BY date DESC")
+	if err != nil {
+		c.String(http.StatusInternalServerError, "Error querying records")
+		return
+	}
 	defer rows.Close()
 
-	w.Header().Set("Content-Type", "text/csv")
-	w.Header().Set("Content-Disposition", "attachment; filename=records.csv")
+	c.Header("Content-Type", "text/csv")
+	c.Header("Content-Disposition", "attachment; filename=records.csv")
 
-	writer := csv.NewWriter(w)
-	writer.Write([]string{"Date", "Description", "Category", "Amount", "Type", "Notes"})
+	writer := csv.NewWriter(c.Writer)
+	_ = writer.Write([]string{"Date", "Description", "Category", "Amount", "Type", "Notes"})
 
 	for rows.Next() {
 		var date, desc, cat, typ, notes string
 		var amt float64
-		rows.Scan(&date, &desc, &cat, &amt, &typ, &notes)
 
-		desc, _ = secure.Decrypt(desc)
-		notes, _ = secure.Decrypt(notes)
+		if err := rows.Scan(&date, &desc, &cat, &amt, &typ, &notes); err != nil {
+			continue // or log the error and break
+		}
 
-		writer.Write([]string{date, desc, cat, strconv.FormatFloat(amt, 'f', 2, 64), typ, notes})
+		decryptedDesc, _ := secure.Decrypt(desc)
+		decryptedNotes, _ := secure.Decrypt(notes)
+
+		record := []string{
+			date,
+			decryptedDesc,
+			cat,
+			strconv.FormatFloat(amt, 'f', 2, 64),
+			typ,
+			decryptedNotes,
+		}
+		_ = writer.Write(record)
 	}
 
 	writer.Flush()

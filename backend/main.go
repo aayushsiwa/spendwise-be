@@ -1,18 +1,25 @@
 package main
 
 import (
+	"context"
 	"log"
-	"net/http"
+	"log/slog"
 	"os"
 
 	"aayushsiwa/expense-tracker/db"
-	"aayushsiwa/expense-tracker/handlers"
+	"aayushsiwa/expense-tracker/routes"
 	"aayushsiwa/expense-tracker/secure"
 
+	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
 
+var errRest = make(chan error)
+var ctx context.Context
+
 func init() {
+	db.Init("records.db")
+
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatal("Error loading .env file")
@@ -24,22 +31,21 @@ func init() {
 	}
 
 	secure.SetKey([]byte(key))
-
 }
 
 func main() {
-	db.Init("records.db")
+	log.Println("Starting Expense Tracker Server...")
 
-	http.HandleFunc("/api/records", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" {
-			handlers.GetRecords(w, r)
-		} else if r.Method == "POST" {
-			handlers.CreateRecord(w, r)
-		}
-	})
+	server := gin.Default()
+	prefix := "/api/v1"
+	apiGroup := server.Group(prefix)
 
-	http.HandleFunc("/api/export/csv", handlers.ExportCSV)
+	apiRoutes := routes.NewRoutes()
+	routes.AttachRoutes(apiGroup, apiRoutes)
 
+	ctx := context.Background()
 	log.Println("Server running at http://localhost:8080")
-	http.ListenAndServe(":8080", nil)
+	if err := server.Run(":8080"); err != nil {
+		slog.ErrorContext(ctx, "ListenAndServe error", "error", err)
+	}
 }
