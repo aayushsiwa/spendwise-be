@@ -14,7 +14,7 @@ import (
 func ExportCSV(c *gin.Context) {
 	download := c.Query("download") == "true"
 
-	rows, err := db.DB.Query("SELECT date, description, category, amount, type, notes FROM records ORDER BY date DESC")
+	rows, err := db.DB.Query("SELECT date, description, category_id, amount, type, notes FROM records ORDER BY date DESC")
 	if err != nil {
 		c.String(http.StatusInternalServerError, "Error querying records")
 		return
@@ -35,13 +35,20 @@ func ExportCSV(c *gin.Context) {
 				continue
 			}
 
+			var categoryName string
+			err := db.DB.QueryRow("SELECT name FROM categories WHERE id = ?", cat).Scan(&categoryName)
+			if err != nil {
+				c.String(http.StatusInternalServerError, "Error querying categories")
+				return
+			}
+
 			decryptedDesc, _ := secure.Decrypt(desc)
 			decryptedNotes, _ := secure.Decrypt(notes)
 
 			record := []string{
 				date,
 				decryptedDesc,
-				cat,
+				categoryName,
 				strconv.FormatFloat(amt, 'f', 2, 64),
 				typ,
 				decryptedNotes,
@@ -63,11 +70,17 @@ func ExportCSV(c *gin.Context) {
 			if err := rows.Scan(&date, &desc, &cat, &amt, &typ, &notes); err != nil {
 				continue
 			}
+			var categoryName string
+			err := db.DB.QueryRow("SELECT name FROM categories WHERE id = ?", cat).Scan(&categoryName)
+			if err != nil {
+				c.String(http.StatusInternalServerError, "Error querying categories")
+				return
+			}
 
 			decryptedDesc, _ := secure.Decrypt(desc)
 			decryptedNotes, _ := secure.Decrypt(notes)
 
-			line := date + "," + decryptedDesc + "," + cat + "," + strconv.FormatFloat(amt, 'f', 2, 64) + "," + typ + "," + decryptedNotes + "\n"
+			line := date + "," + decryptedDesc + "," + categoryName + "," + strconv.FormatFloat(amt, 'f', 2, 64) + "," + typ + "," + decryptedNotes + "\n"
 			c.Writer.Write([]byte(line))
 		}
 	}
