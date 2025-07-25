@@ -9,6 +9,7 @@ MIGRATIONS_DOWN=sql/dropData.sql
 
 ## Run SQL migration file on the SQLite DB
 migrationup:
+	make clean
 	@echo "Applying migration to $(DB_PATH)..."
 	$(SQLITE) $(DB_PATH) < $(MIGRATIONS)
 	@echo "Migration complete."

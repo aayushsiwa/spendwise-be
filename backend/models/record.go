@@ -1,5 +1,12 @@
 package models
 
+type Category struct {
+	ID    int    `json:"id"`
+	Name  string `json:"name"`
+	Icon  string `json:"icon"`
+	Color string `json:"color"`
+}
+
 type Record struct {
 	ID          int     `json:"id"`
 	Date        string  `json:"date"`

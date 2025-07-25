@@ -57,57 +57,57 @@ func NewRoutes() Routes {
 			HandlerFunc: handlers.ExportCSV,
 		},
 		// Summary
-		// {
-		// 	Name:        "GetSummary",
-		// 	Method:      "GET",
-		// 	Pattern:     "/summary",
-		// 	HandlerFunc: handlers.GetSummary,
-		// },
-		// {
-		// 	Name:        "GetSummaryForFilter",
-		// 	Method:      "GET",
-		// 	Pattern:     "/summary/:filter",
-		// 	HandlerFunc: handlers.GetSummaryForFilter,
-		// },
-		// // Import
-		// {
-		// 	Name:        "ImportCSV",
-		// 	Method:      "POST",
-		// 	Pattern:     "/import/csv",
-		// 	HandlerFunc: handlers.ImportCSV,
-		// },
-		// // Categories
-		// {
-		// 	Name:        "GetCategories",
-		// 	Method:      "GET",
-		// 	Pattern:     "/categories",
-		// 	HandlerFunc: handlers.GetCategories,
-		// },
-		// {
-		// 	Name:        "CreateCategory",
-		// 	Method:      "POST",
-		// 	Pattern:     "/categories",
-		// 	HandlerFunc: handlers.CreateCategory,
-		// },
-		// {
-		// 	Name:        "UpdateCategory",
-		// 	Method:      "PATCH",
-		// 	Pattern:     "/categories/:id",
-		// 	HandlerFunc: handlers.UpdateCategory,
-		// },
-		// {
-		// 	Name:        "DeleteCategory",
-		// 	Method:      "DELETE",
-		// 	Pattern:     "/categories/:id",
-		// 	HandlerFunc: handlers.DeleteCategory,
-		// },
-		// // Category Records
-		// {
-		// 	Name:        "GetCategoryRecords",
-		// 	Method:      "GET",
-		// 	Pattern:     "/categories/:category/records",
-		// 	HandlerFunc: handlers.GetCategoryRecords,
-		// },
+		{
+			Name:        "GetSummary",
+			Method:      "GET",
+			Pattern:     "/summary",
+			HandlerFunc: handlers.GetSummary,
+		},
+		{
+			Name:        "GetSummaryForFilter",
+			Method:      "GET",
+			Pattern:     "/summary/:filter/:value",
+			HandlerFunc: handlers.GetSummaryForFilter,
+		},
+		// Import
+		{
+			Name:        "ImportCSV",
+			Method:      "POST",
+			Pattern:     "/import/csv",
+			HandlerFunc: handlers.ImportCSV,
+		},
+		// Categories
+		{
+			Name:        "GetCategories",
+			Method:      "GET",
+			Pattern:     "/categories",
+			HandlerFunc: handlers.GetCategories,
+		},
+		{
+			Name:        "CreateCategory",
+			Method:      "POST",
+			Pattern:     "/categories",
+			HandlerFunc: handlers.CreateCategory,
+		},
+		{
+			Name:        "UpdateCategory",
+			Method:      "PATCH",
+			Pattern:     "/categories/:id",
+			HandlerFunc: handlers.UpdateCategory,
+		},
+		{
+			Name:        "DeleteCategory",
+			Method:      "DELETE",
+			Pattern:     "/categories/:id",
+			HandlerFunc: handlers.DeleteCategory,
+		},
+		// Category Records
+		{
+			Name:        "GetCategoryRecords",
+			Method:      "GET",
+			Pattern:     "/categories/:id",
+			HandlerFunc: handlers.GetCategoryRecords,
+		},
 		// Health Check
 		{
 			Name:    "HealthCheck",
