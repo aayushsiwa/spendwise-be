@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"aayushsiwa/expense-tracker/db"
@@ -35,9 +36,14 @@ func CreateRecord(w http.ResponseWriter, r *http.Request) {
 	rec.Description, _ = secure.Encrypt(rec.Description)
 	rec.Notes, _ = secure.Encrypt(rec.Notes)
 
-	res, _ := db.DB.Exec(`INSERT INTO records (date, description, category, amount, type, notes)
+	res, err := db.DB.Exec(`INSERT INTO records (date, description, category, amount, type, notes)
                           VALUES (?, ?, ?, ?, ?, ?)`,
 		rec.Date, rec.Description, rec.Category, rec.Amount, rec.Type, rec.Notes)
+	if err != nil {
+		log.Println("Error inserting record:", err)
+		http.Error(w, "Failed to insert record", http.StatusInternalServerError)
+		return
+	}
 
 	id, _ := res.LastInsertId()
 	rec.ID = int(id)

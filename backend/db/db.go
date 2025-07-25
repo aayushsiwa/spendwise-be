@@ -15,6 +15,9 @@ func Init(path string) {
 	if err != nil {
 		log.Fatal("DB open error:", err)
 	}
+	if err = DB.Ping(); err != nil {
+		log.Fatal("DB connection error (ping failed):", err)
+	}
 
 	_, err = DB.Exec(`PRAGMA foreign_keys = ON;`)
 	if err != nil {
