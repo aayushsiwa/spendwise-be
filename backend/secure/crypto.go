@@ -5,19 +5,19 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"io"
 )
 
-var key = []byte("your-32-byte-secret-key-123456789012") // Must be 32 bytes
+var encryptionKey []byte
+
+func SetKey(key []byte) {
+	encryptionKey = key
+}
 
 func Encrypt(plain string) (string, error) {
-	block, err := aes.NewCipher(key)
+	block, err := aes.NewCipher(encryptionKey)
 	if err != nil {
-		return "", err
-	}
-
-	nonce := make([]byte, 12)
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
 		return "", err
 	}
 
@@ -26,9 +26,13 @@ func Encrypt(plain string) (string, error) {
 		return "", err
 	}
 
-	ciphertext := aesgcm.Seal(nil, nonce, []byte(plain), nil)
-	final := append(nonce, ciphertext...)
-	return base64.StdEncoding.EncodeToString(final), nil
+	nonce := make([]byte, aesgcm.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return "", err
+	}
+
+	ciphertext := aesgcm.Seal(nonce, nonce, []byte(plain), nil)
+	return base64.StdEncoding.EncodeToString(ciphertext), nil
 }
 
 func Decrypt(encoded string) (string, error) {
@@ -37,10 +41,7 @@ func Decrypt(encoded string) (string, error) {
 		return "", err
 	}
 
-	nonce := data[:12]
-	ciphertext := data[12:]
-
-	block, err := aes.NewCipher(key)
+	block, err := aes.NewCipher(encryptionKey)
 	if err != nil {
 		return "", err
 	}
@@ -50,10 +51,16 @@ func Decrypt(encoded string) (string, error) {
 		return "", err
 	}
 
-	plaintext, err := aesgcm.Open(nil, nonce, ciphertext, nil)
+	nonceSize := aesgcm.NonceSize()
+	if len(data) < nonceSize {
+		return "", errors.New("ciphertext too short")
+	}
+
+	nonce, ciphertext := data[:nonceSize], data[nonceSize:]
+	plain, err := aesgcm.Open(nil, nonce, ciphertext, nil)
 	if err != nil {
 		return "", err
 	}
 
-	return string(plaintext), nil
+	return string(plain), nil
 }
