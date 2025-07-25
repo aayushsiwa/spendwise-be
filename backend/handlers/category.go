@@ -3,7 +3,6 @@ package handlers
 import (
 	"aayushsiwa/expense-tracker/db"
 	"aayushsiwa/expense-tracker/models"
-	"log"
 	"net/http"
 	"strings"
 
@@ -35,7 +34,6 @@ func GetCategoryRecords(c *gin.Context) {
 		return
 	}
 	categoryId := pathParts[len(pathParts)-1]
-	log.Printf("Fetching records for category ID: %s", categoryId)
 
 	var categoryName string
 	err := db.DB.QueryRow("SELECT name FROM categories WHERE id = ?", categoryId).Scan(&categoryName)
@@ -43,8 +41,6 @@ func GetCategoryRecords(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Category not found"})
 		return
 	}
-
-	log.Printf("Category name: %s", categoryName)
 
 	rows, err := db.DB.Query(`
 		SELECT r.id, r.date, r.description, r.category_id, c.name, r.amount, r.type, r.notes
@@ -65,8 +61,6 @@ func GetCategoryRecords(c *gin.Context) {
 		err := rows.Scan(&r.ID, &r.Date, &r.Description, &categoryId, &r.Category, &r.Amount, &r.Type, &r.Notes)
 		if err == nil {
 			records = append(records, r)
-		} else {
-			log.Printf("Error scanning record: %v", err)
 		}
 	}
 	c.JSON(http.StatusOK, records)
