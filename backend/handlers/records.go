@@ -2,12 +2,14 @@ package handlers
 
 import (
 	"database/sql"
+	"log"
 	"net/http"
 	"strconv"
 
 	"aayushsiwa/expense-tracker/db"
 	"aayushsiwa/expense-tracker/models"
 	"aayushsiwa/expense-tracker/secure"
+	"aayushsiwa/expense-tracker/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -81,24 +83,21 @@ func CreateRecord(c *gin.Context) {
 	rec.Description, _ = secure.Encrypt(rec.Description)
 	rec.Notes, _ = secure.Encrypt(rec.Notes)
 
-	res, err := db.DB.Exec(`
-		INSERT INTO records (date, description, category, amount, type, notes)
-		VALUES (?, ?, ?, ?, ?, ?)`,
-		rec.Date, rec.Description, rec.Category, rec.Amount, rec.Type, rec.Notes)
-	if err != nil {
+	customId, _ := utils.GenerateCustomID(rec.Date)
+	log.Println("Generated Custom ID:", customId)
+	rec.ID, _ = strconv.Atoi(customId)
+
+	_, execErr := db.DB.Exec(`
+		INSERT INTO records (id, date, description, category, amount, type, notes)
+		VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		rec.ID, rec.Date, rec.Description, rec.Category, rec.Amount, rec.Type, rec.Notes)
+	if execErr != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to insert record"})
 		return
 	}
 
-	id, err := res.LastInsertId()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal error"})
-		return
-	}
-	rec.ID = int(id)
-
 	c.JSON(http.StatusCreated, gin.H{
-		"message": "Created with ID - " + strconv.Itoa(rec.ID),
+		"message": "Created with ID - " + customId,
 		"id":      rec.ID,
 	})
 }
