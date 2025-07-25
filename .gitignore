@@ -1,2 +1,4 @@
-*tmp
+# backend
+backend/tmp
 backend/records.db
+backend/.env
