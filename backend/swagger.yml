@@ -75,29 +75,102 @@ paths:
         - Records
       parameters:
         - in: query
+          name: start_date
+          schema:
+            type: string
+            format: date
+          description: Start date (inclusive, YYYY-MM-DD)
+        - in: query
+          name: end_date
+          schema:
+            type: string
+            format: date
+          description: End date (inclusive, YYYY-MM-DD)
+        - in: query
+          name: category
+          schema:
+            type: string
+          description: Filter by category name
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum: [income, expense, transfer]
+          description: Filter by record type
+        - in: query
+          name: min_amount
+          schema:
+            type: number
+            format: float
+          description: Minimum amount (inclusive)
+        - in: query
+          name: max_amount
+          schema:
+            type: number
+            format: float
+          description: Maximum amount (inclusive)
+        - in: query
+          name: description
+          schema:
+            type: string
+          description: Filter by substring in description
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          description: Page number (1-based)
+        - in: query
           name: limit
           schema:
             type: integer
             minimum: 1
             maximum: 100
             default: 50
-          description: Maximum number of records to return
-        - in: query
-          name: offset
-          schema:
-            type: integer
-            minimum: 0
-            default: 0
-          description: Number of records to skip
+          description: Number of records per page (max 100)
       responses:
         "200":
           description: List of records retrieved successfully
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Record"
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Record"
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                        description: Current page number
+                        example: 1
+                      limit:
+                        type: integer
+                        description: Number of records per page
+                        example: 50
+                      total_count:
+                        type: integer
+                        description: Total number of records
+                        example: 1000
+                      total_pages:
+                        type: integer
+                        description: Total number of pages
+                        example: 20
+                      has_next:
+                        type: boolean
+                        description: Whether there is a next page
+                        example: true
+                      has_prev:
+                        type: boolean
+                        description: Whether there is a previous page
+                        example: false
+                  required:
+                    - data
+                    - pagination
         "500":
           description: Database error
           content:
