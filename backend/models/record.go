@@ -14,5 +14,5 @@ type Record struct {
 	Category    string  `json:"category"`
 	Amount      float64 `json:"amount"`
 	Type        string  `json:"type"`
-	Notes       string  `json:"notes"`
+	Note        string  `json:"note"`
 }

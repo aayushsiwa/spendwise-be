@@ -14,7 +14,7 @@ import (
 func ExportCSV(c *gin.Context) {
 	download := c.Query("download") == "true"
 
-	rows, err := db.DB.Query("SELECT date, description, category_id, amount, type, notes FROM records ORDER BY date DESC")
+	rows, err := db.DB.Query("SELECT date, description, category_id, amount, type, note FROM records ORDER BY date DESC")
 	if err != nil {
 		c.String(http.StatusInternalServerError, "Error querying records")
 		return
@@ -25,13 +25,13 @@ func ExportCSV(c *gin.Context) {
 		c.Header("Content-Type", "text/csv")
 		c.Header("Content-Disposition", "attachment; filename=records.csv")
 		writer := csv.NewWriter(c.Writer)
-		_ = writer.Write([]string{"Date", "Description", "Category", "Amount", "Type", "Notes"})
+		_ = writer.Write([]string{"Date", "Description", "Category", "Amount", "Type", "Note"})
 
 		for rows.Next() {
-			var date, desc, cat, typ, notes string
+			var date, desc, cat, typ, note string
 			var amt float64
 
-			if err := rows.Scan(&date, &desc, &cat, &amt, &typ, &notes); err != nil {
+			if err := rows.Scan(&date, &desc, &cat, &amt, &typ, &note); err != nil {
 				continue
 			}
 
@@ -43,7 +43,7 @@ func ExportCSV(c *gin.Context) {
 			}
 
 			decryptedDesc, _ := secure.Decrypt(desc)
-			decryptedNotes, _ := secure.Decrypt(notes)
+			decryptedNote, _ := secure.Decrypt(note)
 
 			record := []string{
 				date,
@@ -51,7 +51,7 @@ func ExportCSV(c *gin.Context) {
 				categoryName,
 				strconv.FormatFloat(amt, 'f', 2, 64),
 				typ,
-				decryptedNotes,
+				decryptedNote,
 			}
 			_ = writer.Write(record)
 		}
@@ -61,13 +61,13 @@ func ExportCSV(c *gin.Context) {
 		c.Header("Content-Type", "text/plain; charset=utf-8")
 		c.Header("Content-Disposition", "inline; filename=records.txt")
 
-		c.Writer.Write([]byte("Date,Description,Category,Amount,Type,Notes\n"))
+		c.Writer.Write([]byte("Date,Description,Category,Amount,Type,Note\n"))
 
 		for rows.Next() {
-			var date, desc, cat, typ, notes string
+			var date, desc, cat, typ, note string
 			var amt float64
 
-			if err := rows.Scan(&date, &desc, &cat, &amt, &typ, &notes); err != nil {
+			if err := rows.Scan(&date, &desc, &cat, &amt, &typ, &note); err != nil {
 				continue
 			}
 			var categoryName string
@@ -78,9 +78,9 @@ func ExportCSV(c *gin.Context) {
 			}
 
 			decryptedDesc, _ := secure.Decrypt(desc)
-			decryptedNotes, _ := secure.Decrypt(notes)
+			decryptedNote, _ := secure.Decrypt(note)
 
-			line := date + "," + decryptedDesc + "," + categoryName + "," + strconv.FormatFloat(amt, 'f', 2, 64) + "," + typ + "," + decryptedNotes + "\n"
+			line := date + "," + decryptedDesc + "," + categoryName + "," + strconv.FormatFloat(amt, 'f', 2, 64) + "," + typ + "," + decryptedNote + "\n"
 			c.Writer.Write([]byte(line))
 		}
 	}

@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS records (
   category_id INTEGER,
   amount REAL NOT NULL,
   type TEXT NOT NULL CHECK (type IN ('income', 'expense', 'transfer')),
-  notes TEXT,
+  note TEXT,
   FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
 );
 

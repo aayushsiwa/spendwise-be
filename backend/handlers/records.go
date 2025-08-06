@@ -30,7 +30,7 @@ func GetRecords(c *gin.Context) {
 	pageStr := c.Query("page")
 	limitStr := c.Query("limit")
 
-	slog.Info("GetRecords called with filters", 
+	slog.Info("GetRecords called with filters",
 		"start_date", startDate,
 		"end_date", endDate,
 		"category", category,
@@ -49,7 +49,7 @@ func GetRecords(c *gin.Context) {
 	// Parse pagination parameters
 	page := 1
 	limit := 50 // default limit
-	
+
 	if pageStr != "" {
 		pageNum, err := strconv.Atoi(pageStr)
 		if err != nil || pageNum < 1 {
@@ -58,7 +58,7 @@ func GetRecords(c *gin.Context) {
 			page = pageNum
 		}
 	}
-	
+
 	if limitStr != "" {
 		limitNum, err := strconv.Atoi(limitStr)
 		if err != nil || limitNum < 1 || limitNum > 100 {
@@ -127,7 +127,7 @@ func GetRecords(c *gin.Context) {
 	offset := (page - 1) * limit
 
 	query := `
-		SELECT r.id, r.date, r.description, c.name as category, r.amount, r.type, r.notes
+		SELECT r.id, r.date, r.description, c.name as category, r.amount, r.type, r.note
 		FROM records r
 		JOIN categories c ON r.category_id = c.id
 	`
@@ -152,7 +152,7 @@ func GetRecords(c *gin.Context) {
 	var records []models.Record
 	for rows.Next() {
 		var rec models.Record
-		err := rows.Scan(&rec.ID, &rec.Date, &rec.Description, &rec.Category, &rec.Amount, &rec.Type, &rec.Notes)
+		err := rows.Scan(&rec.ID, &rec.Date, &rec.Description, &rec.Category, &rec.Amount, &rec.Type, &rec.Note)
 		if err != nil {
 			appErr := errors.NewDatabase("Failed to read record data", err)
 			errors.HandleError(c, appErr)
@@ -170,13 +170,13 @@ func GetRecords(c *gin.Context) {
 			}
 		}
 
-		if rec.Notes != "" {
-			decrypted, err := secure.Decrypt(rec.Notes)
+		if rec.Note != "" {
+			decrypted, err := secure.Decrypt(rec.Note)
 			if err != nil {
-				slog.Warn("Failed to decrypt notes", "record_id", rec.ID, "error", err)
-				rec.Notes = "[Encryption Error]"
+				slog.Warn("Failed to decrypt Note", "record_id", rec.ID, "error", err)
+				rec.Note = "[Encryption Error]"
 			} else {
-				rec.Notes = decrypted
+				rec.Note = decrypted
 			}
 		}
 
@@ -206,10 +206,10 @@ func GetRecords(c *gin.Context) {
 	if len(filters) > 0 {
 		countQuery += " WHERE " + strings.Join(filters, " AND ")
 	}
-	
+
 	// Remove pagination args for count query
 	countArgs := args[:len(args)-2]
-	
+
 	err = db.DB.QueryRow(countQuery, countArgs...).Scan(&totalCount)
 	if err != nil {
 		slog.Warn("Failed to get total count", "error", err)
@@ -221,8 +221,8 @@ func GetRecords(c *gin.Context) {
 	hasNext := page < totalPages
 	hasPrev := page > 1
 
-	slog.Info("Records retrieved successfully", 
-		"count", len(records), 
+	slog.Info("Records retrieved successfully",
+		"count", len(records),
 		"filters_applied", len(filters) > 0 || desc != "",
 		"page", page,
 		"limit", limit,
@@ -258,14 +258,14 @@ func GetRecord(c *gin.Context) {
 	}
 
 	row := db.DB.QueryRow(`
-		SELECT r.id, r.date, r.description, c.name as category, r.amount, r.type, r.notes
+		SELECT r.id, r.date, r.description, c.name as category, r.amount, r.type, r.note
 		FROM records r
 		JOIN categories c ON r.category_id = c.id
 		WHERE r.id = ?
 	`, id)
 
 	var rec models.Record
-	if err := row.Scan(&rec.ID, &rec.Date, &rec.Description, &rec.Category, &rec.Amount, &rec.Type, &rec.Notes); err != nil {
+	if err := row.Scan(&rec.ID, &rec.Date, &rec.Description, &rec.Category, &rec.Amount, &rec.Type, &rec.Note); err != nil {
 		if err == sql.ErrNoRows {
 			appErr := errors.NewNotFound(fmt.Sprintf("Record with ID %d not found", id), err)
 			errors.HandleError(c, appErr)
@@ -287,13 +287,13 @@ func GetRecord(c *gin.Context) {
 		}
 	}
 
-	if rec.Notes != "" {
-		decrypted, err := secure.Decrypt(rec.Notes)
+	if rec.Note != "" {
+		decrypted, err := secure.Decrypt(rec.Note)
 		if err != nil {
-			slog.Warn("Failed to decrypt notes", "record_id", rec.ID, "error", err)
-			rec.Notes = "[Encryption Error]"
+			slog.Warn("Failed to decrypt Note", "record_id", rec.ID, "error", err)
+			rec.Note = "[Encryption Error]"
 		} else {
-			rec.Notes = decrypted
+			rec.Note = decrypted
 		}
 	}
 
@@ -328,14 +328,14 @@ func CreateRecord(c *gin.Context) {
 		rec.Description = encrypted
 	}
 
-	if rec.Notes != "" {
-		encrypted, err := secure.Encrypt(rec.Notes)
+	if rec.Note != "" {
+		encrypted, err := secure.Encrypt(rec.Note)
 		if err != nil {
-			appErr := errors.NewEncryption("Failed to encrypt notes", err)
+			appErr := errors.NewEncryption("Failed to encrypt note", err)
 			errors.HandleError(c, appErr)
 			return
 		}
-		rec.Notes = encrypted
+		rec.Note = encrypted
 	}
 
 	// Generate custom ID
@@ -371,9 +371,9 @@ func CreateRecord(c *gin.Context) {
 
 	// Insert record
 	_, err = db.DB.Exec(`
-		INSERT INTO records (id, date, description, category_id, amount, type, notes)
+		INSERT INTO records (id, date, description, category_id, amount, type, note)
 		VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		rec.ID, rec.Date, rec.Description, categoryId, rec.Amount, rec.Type, rec.Notes)
+		rec.ID, rec.Date, rec.Description, categoryId, rec.Amount, rec.Type, rec.Note)
 	if err != nil {
 		appErr := errors.NewDatabase("Failed to insert record", err)
 		errors.HandleError(c, appErr)
@@ -428,14 +428,14 @@ func PatchRecord(c *gin.Context) {
 		rec.Description = encrypted
 	}
 
-	if rec.Notes != "" {
-		encrypted, err := secure.Encrypt(rec.Notes)
+	if rec.Note != "" {
+		encrypted, err := secure.Encrypt(rec.Note)
 		if err != nil {
-			appErr := errors.NewEncryption("Failed to encrypt notes", err)
+			appErr := errors.NewEncryption("Failed to encrypt note", err)
 			errors.HandleError(c, appErr)
 			return
 		}
-		rec.Notes = encrypted
+		rec.Note = encrypted
 	}
 
 	// Get category ID
@@ -472,9 +472,9 @@ func PatchRecord(c *gin.Context) {
 	// Update record
 	_, err = db.DB.Exec(`
 		UPDATE records 
-		SET date = ?, description = ?, category_id = ?, amount = ?, type = ?, notes = ?
+		SET date = ?, description = ?, category_id = ?, amount = ?, type = ?, note = ?
 		WHERE id = ?`,
-		rec.Date, rec.Description, categoryId, rec.Amount, rec.Type, rec.Notes, id)
+		rec.Date, rec.Description, categoryId, rec.Amount, rec.Type, rec.Note, id)
 	if err != nil {
 		appErr := errors.NewDatabase("Failed to update record", err)
 		errors.HandleError(c, appErr)

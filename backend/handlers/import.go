@@ -58,9 +58,9 @@ func ImportCSV(c *gin.Context) {
 		category := strings.ToLower(strings.TrimSpace(record[2]))
 		amountStr := strings.TrimSpace(record[3])
 		recordType := strings.TrimSpace(record[4])
-		notes := ""
+		note := ""
 		if len(record) > 5 {
-			notes = strings.TrimSpace(record[5])
+			note = strings.TrimSpace(record[5])
 		}
 
 		// Validate date
@@ -86,10 +86,10 @@ func ImportCSV(c *gin.Context) {
 		}
 
 		encryptedDescription, _ := secure.Encrypt(description)
-		encryptedNotes, _ := secure.Encrypt(notes)
+		encryptedNote, _ := secure.Encrypt(note)
 
-		_, err = db.DB.Exec(`INSERT INTO records (date, description, category_id, amount, type, notes) VALUES (?, ?, ?, ?, ?, ?)`,
-			date, encryptedDescription, categoryID, amount, recordType, encryptedNotes)
+		_, err = db.DB.Exec(`INSERT INTO records (date, description, category_id, amount, type, note) VALUES (?, ?, ?, ?, ?, ?)`,
+			date, encryptedDescription, categoryID, amount, recordType, encryptedNote)
 		if err != nil {
 			continue
 		}
@@ -138,15 +138,15 @@ func ImportJSON(c *gin.Context) {
 		}
 
 		encDesc, _ := secure.Encrypt(rec.Description)
-		encNotes, _ := secure.Encrypt(rec.Notes)
+		encNote, _ := secure.Encrypt(rec.Note)
 
 		customID, err := utils.GenerateCustomID(date)
 		if err != nil {
 			continue
 		}
 
-		_, err = db.DB.Exec(`INSERT INTO records (id, date, description, category_id, amount, type, notes) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			customID, date, encDesc, categoryID, rec.Amount, rec.Type, encNotes)
+		_, err = db.DB.Exec(`INSERT INTO records (id, date, description, category_id, amount, type, note) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			customID, date, encDesc, categoryID, rec.Amount, rec.Type, encNote)
 		if err != nil {
 			log.Printf("Failed to insert record: %v", err)
 			continue

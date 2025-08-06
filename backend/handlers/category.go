@@ -70,7 +70,7 @@ func GetCategoryRecords(c *gin.Context) {
 	}
 
 	rows, err := db.DB.Query(`
-		SELECT r.id, r.date, r.description, r.category_id, c.name, r.amount, r.type, r.notes
+		SELECT r.id, r.date, r.description, r.category_id, c.name, r.amount, r.type, r.note
 		FROM records r
 		JOIN categories c ON r.category_id = c.id
 		WHERE c.name = ?
@@ -86,7 +86,7 @@ func GetCategoryRecords(c *gin.Context) {
 	var records []models.Record
 	for rows.Next() {
 		var r models.Record
-		err := rows.Scan(&r.ID, &r.Date, &r.Description, &categoryId, &r.Category, &r.Amount, &r.Type, &r.Notes)
+		err := rows.Scan(&r.ID, &r.Date, &r.Description, &categoryId, &r.Category, &r.Amount, &r.Type, &r.Note)
 		if err != nil {
 			slog.Warn("Failed to scan record row", "error", err)
 			continue // Skip invalid rows but continue processing
@@ -122,7 +122,7 @@ func CreateCategories(c *gin.Context) {
 	// Validate all categories before processing
 	validator := validation.NewValidator()
 	var allValidationErrs errors.ValidationErrors
-	
+
 	for i, cat := range categories {
 		validationErrs := validator.ValidateCategory(&cat)
 		for _, err := range validationErrs {
@@ -189,7 +189,7 @@ func CreateCategories(c *gin.Context) {
 
 func UpdateCategory(c *gin.Context) {
 	idStr := c.Param("id")
-	
+
 	// Validate ID parameter
 	validator := validation.NewValidator()
 	id, validationErrs := validator.ValidateID(idStr)
@@ -220,7 +220,7 @@ func UpdateCategory(c *gin.Context) {
 		errors.HandleError(c, appErr)
 		return
 	}
-	
+
 	if exists == 0 {
 		appErr := errors.NewNotFound("Category not found", nil).WithDetails(map[string]interface{}{
 			"category_id": id,
@@ -229,21 +229,21 @@ func UpdateCategory(c *gin.Context) {
 		return
 	}
 
-	_, err = db.DB.Exec("UPDATE categories SET name = ?, icon = ?, color = ? WHERE id = ?", 
+	_, err = db.DB.Exec("UPDATE categories SET name = ?, icon = ?, color = ? WHERE id = ?",
 		cat.Name, cat.Icon, cat.Color, id)
 	if err != nil {
 		appErr := errors.NewDatabase("Failed to update category", err)
 		errors.HandleError(c, appErr)
 		return
 	}
-	
+
 	slog.Info("Category updated successfully", "category_id", id, "name", cat.Name)
 	c.JSON(http.StatusOK, gin.H{"id": id, "name": cat.Name, "icon": cat.Icon, "color": cat.Color})
 }
 
 func DeleteCategory(c *gin.Context) {
 	idStr := c.Param("id")
-	
+
 	// Validate ID parameter
 	validator := validation.NewValidator()
 	id, validationErrs := validator.ValidateID(idStr)
@@ -260,7 +260,7 @@ func DeleteCategory(c *gin.Context) {
 		errors.HandleError(c, appErr)
 		return
 	}
-	
+
 	if exists == 0 {
 		appErr := errors.NewNotFound("Category not found", nil).WithDetails(map[string]interface{}{
 			"category_id": id,
@@ -277,10 +277,10 @@ func DeleteCategory(c *gin.Context) {
 		errors.HandleError(c, appErr)
 		return
 	}
-	
+
 	if recordCount > 0 {
 		appErr := errors.NewConflict("Cannot delete category that has associated records", nil).WithDetails(map[string]interface{}{
-			"category_id": id,
+			"category_id":  id,
 			"record_count": recordCount,
 		})
 		errors.HandleError(c, appErr)
@@ -293,7 +293,7 @@ func DeleteCategory(c *gin.Context) {
 		errors.HandleError(c, appErr)
 		return
 	}
-	
+
 	slog.Info("Category deleted successfully", "category_id", id)
 	c.JSON(http.StatusNoContent, nil)
 }

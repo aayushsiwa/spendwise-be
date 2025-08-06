@@ -25,85 +25,85 @@ func NewValidator() *Validator {
 // ValidateRecord validates a record model
 func (v *Validator) ValidateRecord(record *models.Record) errors.ValidationErrors {
 	v.errors = make(errors.ValidationErrors, 0)
-	
+
 	// Validate required fields
 	v.required("date", record.Date, "Date is required")
 	v.required("category", record.Category, "Category is required")
 	v.required("type", record.Type, "Type is required")
-	
+
 	// Validate date format
 	if record.Date != "" {
 		v.dateFormat("date", record.Date, "Date must be in YYYY-MM-DD format")
 	}
-	
+
 	// Validate amount
 	v.positiveNumber("amount", record.Amount, "Amount must be a positive number")
-	
+
 	// Validate type
 	if record.Type != "" {
 		v.enum("type", record.Type, []string{"income", "expense", "transfer"}, "Type must be income, expense, or transfer")
 	}
-	
+
 	// Validate description length
 	if record.Description != "" {
 		v.maxLength("description", record.Description, 255, "Description must be 255 characters or less")
 	}
-	
-	// Validate notes length
-	if record.Notes != "" {
-		v.maxLength("notes", record.Notes, 1000, "Notes must be 1000 characters or less")
+
+	// Validate note length
+	if record.Note != "" {
+		v.maxLength("note", record.Note, 1000, "Note must be 1000 characters or less")
 	}
-	
+
 	return v.errors
 }
 
 // ValidateCategory validates a category model
 func (v *Validator) ValidateCategory(category *models.Category) errors.ValidationErrors {
 	v.errors = make(errors.ValidationErrors, 0)
-	
+
 	// Validate required fields
 	v.required("name", category.Name, "Category name is required")
-	
+
 	// Validate name length
 	if category.Name != "" {
 		v.minLength("name", category.Name, 1, "Category name must be at least 1 character")
 		v.maxLength("name", category.Name, 50, "Category name must be 50 characters or less")
 		v.pattern("name", category.Name, `^[a-zA-Z0-9\s\-_]+$`, "Category name contains invalid characters")
 	}
-	
+
 	// Validate icon length
 	if category.Icon != "" {
 		v.maxLength("icon", category.Icon, 50, "Icon must be 50 characters or less")
 	}
-	
+
 	// Validate color format (hex color)
 	if category.Color != "" {
 		v.pattern("color", category.Color, `^#[0-9A-Fa-f]{6}$`, "Color must be a valid hex color (e.g., #FF0000)")
 	}
-	
+
 	return v.errors
 }
 
 // ValidateID validates an ID parameter
 func (v *Validator) ValidateID(idStr string) (int, errors.ValidationErrors) {
 	v.errors = make(errors.ValidationErrors, 0)
-	
+
 	if idStr == "" {
 		v.errors = append(v.errors, errors.NewValidationError("id", "ID is required", idStr))
 		return 0, v.errors
 	}
-	
+
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
 		v.errors = append(v.errors, errors.NewValidationError("id", "ID must be a valid integer", idStr))
 		return 0, v.errors
 	}
-	
+
 	if id <= 0 {
 		v.errors = append(v.errors, errors.NewValidationError("id", "ID must be a positive integer", id))
 		return 0, v.errors
 	}
-	
+
 	return id, v.errors
 }
 
@@ -163,4 +163,4 @@ func (v *Validator) HasErrors() bool {
 // GetErrors returns the validation errors
 func (v *Validator) GetErrors() errors.ValidationErrors {
 	return v.errors
-} 
+}

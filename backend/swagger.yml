@@ -4,7 +4,7 @@ info:
   description: |
     A comprehensive API for managing personal finance records with advanced error handling, 
     validation, and security features.
-    
+
     ## Features
     - **CRUD Operations**: Create, read, update, and delete financial records
     - **Category Management**: Organize records by categories with icons and colors
@@ -13,13 +13,13 @@ info:
     - **Advanced Error Handling**: Structured error responses with detailed validation
     - **Security**: Encrypted sensitive data and rate limiting
     - **Health Monitoring**: System health checks and monitoring
-    
+
     ## Authentication
     Currently, this API does not require authentication for simplicity.
-    
+
     ## Rate Limiting
     The API implements rate limiting of 100 requests per minute per IP address.
-    
+
     ## Error Handling
     All errors follow a consistent JSON structure with proper HTTP status codes.
   version: 1.0.0
@@ -177,7 +177,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-    
+
     post:
       summary: Create a new finance record
       description: Create a new financial record with validation and encryption
@@ -195,7 +195,7 @@ paths:
               category: "Food"
               amount: 75.50
               type: "expense"
-              notes: "Weekly groceries from supermarket"
+              note: "Weekly groceries from supermarket"
       responses:
         "201":
           description: Record created successfully
@@ -262,7 +262,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-    
+
     patch:
       summary: Update a finance record
       description: Update an existing financial record with validation
@@ -288,7 +288,7 @@ paths:
               category: "Food"
               amount: 80.00
               type: "expense"
-              notes: "Updated weekly groceries"
+              note: "Updated weekly groceries"
       responses:
         "200":
           description: Record updated successfully
@@ -314,7 +314,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-    
+
     delete:
       summary: Delete a finance record
       description: Delete a financial record by ID
@@ -380,7 +380,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-    
+
     post:
       summary: Create multiple categories
       description: Create multiple categories in a single request
@@ -472,7 +472,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-    
+
     delete:
       summary: Delete a category
       description: Delete a category (only if no records are associated)
@@ -799,9 +799,9 @@ components:
           enum: [income, expense, transfer]
           description: Record type
           example: "expense"
-        notes:
+        note:
           type: string
-          description: Additional notes (encrypted in database)
+          description: Additional note (encrypted in database)
           example: "Weekly groceries from supermarket"
           maxLength: 1000
       required:
@@ -844,9 +844,9 @@ components:
           enum: [income, expense, transfer]
           description: Record type
           example: "expense"
-        notes:
+        note:
           type: string
-          description: Additional notes
+          description: Additional note
           example: "Weekly groceries from supermarket"
           maxLength: 1000
 
@@ -872,7 +872,7 @@ components:
           type: string
           description: Category color in hex format
           example: "#FF6B6B"
-          pattern: '^#[0-9A-Fa-f]{6}$'
+          pattern: "^#[0-9A-Fa-f]{6}$"
       required:
         - id
         - name
@@ -897,7 +897,7 @@ components:
           type: string
           description: Category color in hex format
           example: "#FF6B6B"
-          pattern: '^#[0-9A-Fa-f]{6}$'
+          pattern: "^#[0-9A-Fa-f]{6}$"
 
     # Summary Schemas
     MonthlySummary:
@@ -1082,7 +1082,6 @@ tags:
     description: Data export and import operations
   - name: System
     description: System health and monitoring
-
 # Global security (for future use)
 # security:
 #   - ApiKeyAuth: []
