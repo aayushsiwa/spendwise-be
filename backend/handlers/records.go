@@ -27,8 +27,10 @@ func GetRecords(c *gin.Context) {
 	desc := c.Query("description")
 	minAmountStr := c.Query("min_amount")
 	maxAmountStr := c.Query("max_amount")
+	pageStr := c.Query("page")
+	limitStr := c.Query("limit")
 
-	slog.Info("GetRecords called with filters",
+	slog.Info("GetRecords called with filters", 
 		"start_date", startDate,
 		"end_date", endDate,
 		"category", category,
@@ -36,11 +38,35 @@ func GetRecords(c *gin.Context) {
 		"description", desc,
 		"min_amount", minAmountStr,
 		"max_amount", maxAmountStr,
+		"page", pageStr,
+		"limit", limitStr,
 	)
 
 	// Validation
 	validator := validation.NewValidator()
 	var validationErrs errors.ValidationErrors
+
+	// Parse pagination parameters
+	page := 1
+	limit := 50 // default limit
+	
+	if pageStr != "" {
+		pageNum, err := strconv.Atoi(pageStr)
+		if err != nil || pageNum < 1 {
+			validationErrs = append(validationErrs, errors.NewValidationError("page", "Page must be a positive integer", pageStr))
+		} else {
+			page = pageNum
+		}
+	}
+	
+	if limitStr != "" {
+		limitNum, err := strconv.Atoi(limitStr)
+		if err != nil || limitNum < 1 || limitNum > 100 {
+			validationErrs = append(validationErrs, errors.NewValidationError("limit", "Limit must be between 1 and 100", limitStr))
+		} else {
+			limit = limitNum
+		}
+	}
 
 	var filters []string
 	var args []interface{}
@@ -97,6 +123,9 @@ func GetRecords(c *gin.Context) {
 		return
 	}
 
+	// Calculate offset for pagination
+	offset := (page - 1) * limit
+
 	query := `
 		SELECT r.id, r.date, r.description, c.name as category, r.amount, r.type, r.notes
 		FROM records r
@@ -105,7 +134,10 @@ func GetRecords(c *gin.Context) {
 	if len(filters) > 0 {
 		query += " WHERE " + strings.Join(filters, " AND ")
 	}
-	query += " ORDER BY r.date DESC"
+	query += " ORDER BY r.date DESC LIMIT ? OFFSET ?"
+
+	// Add pagination parameters to args
+	args = append(args, limit, offset)
 
 	slog.Debug("Executing query", "query", query, "args", args)
 
@@ -164,8 +196,54 @@ func GetRecords(c *gin.Context) {
 		return
 	}
 
-	slog.Info("Records retrieved successfully", "count", len(records), "filters_applied", len(filters) > 0 || desc != "")
-	c.JSON(http.StatusOK, records)
+	// Get total count for pagination metadata
+	var totalCount int
+	countQuery := `
+		SELECT COUNT(*)
+		FROM records r
+		JOIN categories c ON r.category_id = c.id
+	`
+	if len(filters) > 0 {
+		countQuery += " WHERE " + strings.Join(filters, " AND ")
+	}
+	
+	// Remove pagination args for count query
+	countArgs := args[:len(args)-2]
+	
+	err = db.DB.QueryRow(countQuery, countArgs...).Scan(&totalCount)
+	if err != nil {
+		slog.Warn("Failed to get total count", "error", err)
+		totalCount = len(records) // fallback to current page count
+	}
+
+	// Calculate pagination metadata
+	totalPages := (totalCount + limit - 1) / limit
+	hasNext := page < totalPages
+	hasPrev := page > 1
+
+	slog.Info("Records retrieved successfully", 
+		"count", len(records), 
+		"filters_applied", len(filters) > 0 || desc != "",
+		"page", page,
+		"limit", limit,
+		"total_count", totalCount,
+		"total_pages", totalPages,
+	)
+
+	// Return response with pagination metadata
+	response := gin.H{
+		"data": records,
+		"pagination": gin.H{
+			"page":        page,
+			"limit":       limit,
+			"total_count": totalCount,
+			"total_pages": totalPages,
+			"has_next":    hasNext,
+			"has_prev":    hasPrev,
+		},
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 func GetRecord(c *gin.Context) {
