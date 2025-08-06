@@ -1,131 +1,1015 @@
 openapi: 3.0.3
 info:
   title: Personal Finance Tracker API
-  description: API for managing personal finance records using Go + SQLite
+  description: |
+    A comprehensive API for managing personal finance records with advanced error handling, 
+    validation, and security features.
+    
+    ## Features
+    - **CRUD Operations**: Create, read, update, and delete financial records
+    - **Category Management**: Organize records by categories with icons and colors
+    - **Summary Analytics**: Monthly summaries and financial insights
+    - **Data Export/Import**: CSV export and import functionality
+    - **Advanced Error Handling**: Structured error responses with detailed validation
+    - **Security**: Encrypted sensitive data and rate limiting
+    - **Health Monitoring**: System health checks and monitoring
+    
+    ## Authentication
+    Currently, this API does not require authentication for simplicity.
+    
+    ## Rate Limiting
+    The API implements rate limiting of 100 requests per minute per IP address.
+    
+    ## Error Handling
+    All errors follow a consistent JSON structure with proper HTTP status codes.
   version: 1.0.0
+  contact:
+    name: API Support
+    email: support@expense-tracker.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
 servers:
   - url: http://localhost:8080
     description: Local development server
+  - url: https://api.expense-tracker.com
+    description: Production server
 
 paths:
-  /api/records:
+  # Health Check
+  /health:
     get:
-      summary: Get all finance records
+      summary: Health check endpoint
+      description: Check if the API and database are healthy
+      tags:
+        - System
       responses:
         "200":
-          description: A list of records
+          description: System is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "healthy"
+        "503":
+          description: System is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+                example:
+                  error:
+                    type: "system_error"
+                    message: "Database connection failed"
+
+  # Records API
+  /api/v1/records:
+    get:
+      summary: Get all finance records
+      description: Retrieve all financial records with decrypted sensitive data
+      tags:
+        - Records
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+          description: Maximum number of records to return
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: Number of records to skip
+      responses:
+        "200":
+          description: List of records retrieved successfully
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/Record"
+        "500":
+          description: Database error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    
     post:
       summary: Create a new finance record
+      description: Create a new financial record with validation and encryption
+      tags:
+        - Records
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: "#/components/schemas/RecordInput"
+            example:
+              date: "2024-01-15"
+              description: "Grocery shopping"
+              category: "Food"
+              amount: 75.50
+              type: "expense"
+              notes: "Weekly groceries from supermarket"
       responses:
         "201":
-          description: Created successfully
+          description: Record created successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Record"
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Record with id 123456 created successfully"
+                  id:
+                    type: integer
+                    example: 123456
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "500":
+          description: Database or encryption error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
-  /api/records/{id}:
-    put:
-      summary: Update a finance record
+  /api/v1/records/{id}:
+    get:
+      summary: Get a specific finance record
+      description: Retrieve a specific financial record by ID
+      tags:
+        - Records
       parameters:
         - in: path
           name: id
           required: true
           schema:
             type: integer
+            minimum: 1
+          description: Record ID
+      responses:
+        "200":
+          description: Record retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Record"
+        "400":
+          description: Invalid ID format
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "404":
+          description: Record not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Database error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    
+    patch:
+      summary: Update a finance record
+      description: Update an existing financial record with validation
+      tags:
+        - Records
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          description: Record ID
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: "#/components/schemas/RecordInput"
+            example:
+              date: "2024-01-15"
+              description: "Updated grocery shopping"
+              category: "Food"
+              amount: 80.00
+              type: "expense"
+              notes: "Updated weekly groceries"
       responses:
         "200":
-          description: Updated successfully
+          description: Record updated successfully
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Record"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "404":
+          description: Record not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Database error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    
     delete:
       summary: Delete a finance record
+      description: Delete a financial record by ID
+      tags:
+        - Records
       parameters:
         - in: path
           name: id
           required: true
           schema:
             type: integer
-      responses:
-        "204":
-          description: Deleted successfully
-
-  /api/export/csv:
-    get:
-      summary: Export all records as CSV
+            minimum: 1
+          description: Record ID
       responses:
         "200":
-          description: CSV export
+          description: Record deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Record with id 123456 deleted successfully"
+        "400":
+          description: Invalid ID format
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "404":
+          description: Record not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Database error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # Categories API
+  /api/v1/categories:
+    get:
+      summary: Get all categories
+      description: Retrieve all available categories
+      tags:
+        - Categories
+      responses:
+        "200":
+          description: Categories retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Category"
+        "500":
+          description: Database error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    
+    post:
+      summary: Create multiple categories
+      description: Create multiple categories in a single request
+      tags:
+        - Categories
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: "#/components/schemas/CategoryInput"
+            example:
+              - name: "Food"
+                icon: "🍕"
+                color: "#FF6B6B"
+              - name: "Transport"
+                icon: "🚗"
+                color: "#4ECDC4"
+      responses:
+        "201":
+          description: Categories created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Category"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "500":
+          description: Database error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/categories/{id}:
+    put:
+      summary: Update a category
+      description: Update an existing category
+      tags:
+        - Categories
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          description: Category ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CategoryInput"
+            example:
+              name: "Updated Food"
+              icon: "🍕"
+              color: "#FF6B6B"
+      responses:
+        "200":
+          description: Category updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "404":
+          description: Category not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Database error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    
+    delete:
+      summary: Delete a category
+      description: Delete a category (only if no records are associated)
+      tags:
+        - Categories
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          description: Category ID
+      responses:
+        "204":
+          description: Category deleted successfully
+        "400":
+          description: Invalid ID format
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "404":
+          description: Category not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Category has associated records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Database error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/categories/{id}/records:
+    get:
+      summary: Get records by category
+      description: Retrieve all records for a specific category
+      tags:
+        - Categories
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          description: Category ID
+      responses:
+        "200":
+          description: Category records retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Record"
+        "400":
+          description: Invalid ID format
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "404":
+          description: Category not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Database error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # Summary API
+  /api/v1/summary:
+    get:
+      summary: Get financial summary
+      description: Retrieve monthly financial summaries
+      tags:
+        - Summary
+      responses:
+        "200":
+          description: Summary retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MonthlySummary"
+        "500":
+          description: Database error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/summary/month/{month}:
+    get:
+      summary: Get summary by month
+      description: Retrieve financial summary for a specific month (YYYY-MM format)
+      tags:
+        - Summary
+      parameters:
+        - in: path
+          name: month
+          required: true
+          schema:
+            type: string
+            pattern: '^\d{4}-\d{2}$'
+          description: Month in YYYY-MM format
+          example: "2024-01"
+      responses:
+        "200":
+          description: Monthly summary retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonthlySummary"
+        "400":
+          description: Invalid month format
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "404":
+          description: No data found for month
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Database error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/summary/category/{category}:
+    get:
+      summary: Get summary by category
+      description: Retrieve financial summary for a specific category
+      tags:
+        - Summary
+      parameters:
+        - in: path
+          name: category
+          required: true
+          schema:
+            type: string
+          description: Category name
+          example: "Food"
+      responses:
+        "200":
+          description: Category summary retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategorySummary"
+        "404":
+          description: No data found for category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Database error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/summary/type/{type}:
+    get:
+      summary: Get summary by record type
+      description: Retrieve financial summary for a specific record type
+      tags:
+        - Summary
+      parameters:
+        - in: path
+          name: type
+          required: true
+          schema:
+            type: string
+            enum: [income, expense, transfer]
+          description: Record type
+          example: "expense"
+      responses:
+        "200":
+          description: Type summary retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TypeSummary"
+        "400":
+          description: Invalid type
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "404":
+          description: No data found for type
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Database error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # Export/Import API
+  /api/v1/export/csv:
+    get:
+      summary: Export records as CSV
+      description: Export all financial records as a CSV file
+      tags:
+        - Export/Import
+      responses:
+        "200":
+          description: CSV export successful
           content:
             text/csv:
               schema:
                 type: string
                 format: binary
+        "500":
+          description: Export error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/import/csv:
+    post:
+      summary: Import records from CSV
+      description: Import financial records from a CSV file
+      tags:
+        - Export/Import
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: CSV file to import
+      responses:
+        "200":
+          description: Import successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Successfully imported 50 records"
+                  imported:
+                    type: integer
+                    example: 50
+                  errors:
+                    type: integer
+                    example: 2
+        "400":
+          description: Invalid file format or validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "500":
+          description: Import error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
 components:
   schemas:
+    # Record Schemas
     Record:
       type: object
       properties:
         id:
           type: integer
+          description: Unique record identifier
+          example: 123456
         date:
           type: string
           format: date
-          example: 2025-07-24
+          description: Record date in YYYY-MM-DD format
+          example: "2024-01-15"
         description:
           type: string
+          description: Record description (encrypted in database)
+          example: "Grocery shopping"
+          maxLength: 255
         category:
           type: string
+          description: Category name
+          example: "Food"
         amount:
           type: number
           format: float
+          description: Record amount
+          example: 75.50
+          minimum: 0
         type:
           type: string
-          enum: [income, expense]
+          enum: [income, expense, transfer]
+          description: Record type
+          example: "expense"
         notes:
           type: string
+          description: Additional notes (encrypted in database)
+          example: "Weekly groceries from supermarket"
+          maxLength: 1000
+      required:
+        - id
+        - date
+        - category
+        - amount
+        - type
 
     RecordInput:
       type: object
       required:
         - date
+        - category
         - amount
         - type
       properties:
         date:
           type: string
           format: date
-          example: 2025-07-24
+          description: Record date in YYYY-MM-DD format
+          example: "2024-01-15"
         description:
           type: string
+          description: Record description
+          example: "Grocery shopping"
+          maxLength: 255
         category:
           type: string
+          description: Category name (must exist)
+          example: "Food"
         amount:
           type: number
           format: float
+          description: Record amount (must be positive)
+          example: 75.50
+          minimum: 0
         type:
           type: string
-          enum: [income, expense]
+          enum: [income, expense, transfer]
+          description: Record type
+          example: "expense"
         notes:
           type: string
+          description: Additional notes
+          example: "Weekly groceries from supermarket"
+          maxLength: 1000
+
+    # Category Schemas
+    Category:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Unique category identifier
+          example: 1
+        name:
+          type: string
+          description: Category name (lowercase)
+          example: "food"
+          maxLength: 50
+        icon:
+          type: string
+          description: Category icon (emoji or icon name)
+          example: "🍕"
+          maxLength: 50
+        color:
+          type: string
+          description: Category color in hex format
+          example: "#FF6B6B"
+          pattern: '^#[0-9A-Fa-f]{6}$'
+      required:
+        - id
+        - name
+
+    CategoryInput:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: Category name
+          example: "Food"
+          maxLength: 50
+          pattern: '^[a-zA-Z0-9\s\-_]+$'
+        icon:
+          type: string
+          description: Category icon
+          example: "🍕"
+          maxLength: 50
+        color:
+          type: string
+          description: Category color in hex format
+          example: "#FF6B6B"
+          pattern: '^#[0-9A-Fa-f]{6}$'
+
+    # Summary Schemas
+    MonthlySummary:
+      type: object
+      properties:
+        month:
+          type: string
+          description: Month in YYYY-MM format
+          example: "2024-01"
+        total_income:
+          type: number
+          format: float
+          description: Total income for the month
+          example: 5000.00
+        total_expense:
+          type: number
+          format: float
+          description: Total expenses for the month
+          example: 3200.50
+        opening_balance:
+          type: number
+          format: float
+          description: Opening balance for the month
+          example: 15000.00
+        net_balance:
+          type: number
+          format: float
+          description: Net balance (income - expense + transfer)
+          example: 1800.00
+        closing_balance:
+          type: number
+          format: float
+          description: Closing balance for the month
+          example: 16800.00
+      required:
+        - month
+        - total_income
+        - total_expense
+        - opening_balance
+        - net_balance
+        - closing_balance
+
+    CategorySummary:
+      type: object
+      properties:
+        category:
+          type: string
+          description: Category name
+          example: "Food"
+        total_income:
+          type: number
+          format: float
+          description: Total income for the category
+          example: 0.00
+        total_expense:
+          type: number
+          format: float
+          description: Total expenses for the category
+          example: 1250.75
+        net_balance:
+          type: number
+          format: float
+          description: Net balance (income - expense)
+          example: -1250.75
+        closing_balance:
+          type: number
+          format: float
+          description: Closing balance for the category
+          example: -1250.75
+      required:
+        - category
+        - total_income
+        - total_expense
+        - net_balance
+        - closing_balance
+
+    TypeSummary:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [income, expense, transfer]
+          description: Record type
+          example: "expense"
+        total:
+          type: number
+          format: float
+          description: Total amount for the type
+          example: 12500.50
+        net_balance:
+          type: number
+          format: float
+          description: Net balance (positive for income, negative for expense)
+          example: -12500.50
+        closing_balance:
+          type: number
+          format: float
+          description: Closing balance for the type
+          example: -12500.50
+      required:
+        - type
+        - total
+        - net_balance
+        - closing_balance
+
+    # Error Schemas
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            type:
+              type: string
+              description: Error type identifier
+              example: "database_error"
+            message:
+              type: string
+              description: Human-readable error message
+              example: "Failed to retrieve records"
+            details:
+              type: object
+              description: Additional error details (optional)
+              additionalProperties: true
+          required:
+            - type
+            - message
+
+    ValidationError:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            type:
+              type: string
+              description: Error type identifier
+              example: "validation_error"
+            message:
+              type: string
+              description: Human-readable error message
+              example: "Validation failed"
+            details:
+              type: object
+              description: Field-specific validation errors
+              additionalProperties:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: Field-specific error message
+                  value:
+                    description: Invalid value provided
+              example:
+                amount:
+                  message: "Amount must be a positive number"
+                  value: -100
+                date:
+                  message: "Date must be in YYYY-MM-DD format"
+                  value: "invalid-date"
+          required:
+            - type
+            - message
+            - details
+
+  # Security Schemes (for future use)
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for authentication (future feature)
+
+tags:
+  - name: Records
+    description: Financial record management operations
+  - name: Categories
+    description: Category management operations
+  - name: Summary
+    description: Financial summary and analytics
+  - name: Export/Import
+    description: Data export and import operations
+  - name: System
+    description: System health and monitoring
+
+# Global security (for future use)
+# security:
+#   - ApiKeyAuth: []
