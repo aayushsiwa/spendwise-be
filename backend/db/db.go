@@ -3,7 +3,6 @@ package db
 import (
 	"database/sql"
 	"log/slog"
-	"os"
 
 	_ "modernc.org/sqlite"
 )
@@ -18,7 +17,7 @@ func Init(path string) error {
 		slog.Error("Failed to open database", "path", path, "error", err)
 		return err
 	}
-	
+
 	if err = DB.Ping(); err != nil {
 		slog.Error("Database connection failed", "path", path, "error", err)
 		return err
