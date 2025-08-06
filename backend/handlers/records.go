@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"aayushsiwa/expense-tracker/db"
 	"aayushsiwa/expense-tracker/errors"
@@ -18,12 +19,97 @@ import (
 )
 
 func GetRecords(c *gin.Context) {
-	rows, err := db.DB.Query(`
+	// Query params
+	startDate := c.Query("start_date")
+	endDate := c.Query("end_date")
+	category := c.Query("category")
+	recordType := c.Query("type")
+	desc := c.Query("description")
+	minAmountStr := c.Query("min_amount")
+	maxAmountStr := c.Query("max_amount")
+
+	slog.Info("GetRecords called with filters",
+		"start_date", startDate,
+		"end_date", endDate,
+		"category", category,
+		"type", recordType,
+		"description", desc,
+		"min_amount", minAmountStr,
+		"max_amount", maxAmountStr,
+	)
+
+	// Validation
+	validator := validation.NewValidator()
+	var validationErrs errors.ValidationErrors
+
+	var filters []string
+	var args []interface{}
+
+	if startDate != "" {
+		startDate, err := utils.ParseDate(startDate)
+		if err != nil {
+			validationErrs = append(validationErrs, errors.NewValidationError("start_date", "Start date must be in YYYY-MM-DD format", startDate))
+		}
+		filters = append(filters, "r.date >= ?")
+		args = append(args, startDate)
+	}
+	if endDate != "" {
+		endDate, err := utils.ParseDate(endDate)
+		if err != nil {
+			validationErrs = append(validationErrs, errors.NewValidationError("end_date", "End date must be in YYYY-MM-DD format", endDate))
+			errors.HandleValidationErrors(c, validationErrs)
+			return
+		}
+		filters = append(filters, "r.date <= ?")
+		args = append(args, endDate)
+	}
+	if category != "" {
+		filters = append(filters, "c.name = ?")
+		args = append(args, category)
+	}
+	if recordType != "" {
+		filters = append(filters, "r.type = ?")
+		args = append(args, recordType)
+	}
+	// Note: description filtering is done in Go after decryption
+	if minAmountStr != "" {
+		minAmount, err := strconv.ParseFloat(minAmountStr, 64)
+		if err != nil {
+			validationErrs = append(validationErrs, errors.NewValidationError("min_amount", "min_amount must be a number", minAmountStr))
+		} else {
+			filters = append(filters, "r.amount >= ?")
+			args = append(args, minAmount)
+		}
+	}
+	if maxAmountStr != "" {
+		maxAmount, err := strconv.ParseFloat(maxAmountStr, 64)
+		if err != nil {
+			validationErrs = append(validationErrs, errors.NewValidationError("max_amount", "max_amount must be a number", maxAmountStr))
+		} else {
+			filters = append(filters, "r.amount <= ?")
+			args = append(args, maxAmount)
+		}
+	}
+
+	validationErrs = append(validationErrs, validator.GetErrors()...)
+	if len(validationErrs) > 0 {
+		errors.HandleValidationErrors(c, validationErrs)
+		return
+	}
+
+	query := `
 		SELECT r.id, r.date, r.description, c.name as category, r.amount, r.type, r.notes
 		FROM records r
 		JOIN categories c ON r.category_id = c.id
-		ORDER BY r.date DESC
-	`)
+	`
+	if len(filters) > 0 {
+		query += " WHERE " + strings.Join(filters, " AND ")
+	}
+	query += " ORDER BY r.date DESC"
+
+	slog.Debug("Executing query", "query", query, "args", args)
+
+	rows, err := db.DB.Query(query, args...)
 	if err != nil {
 		appErr := errors.NewDatabase("Failed to retrieve records", err)
 		errors.HandleError(c, appErr)
@@ -62,6 +148,13 @@ func GetRecords(c *gin.Context) {
 			}
 		}
 
+		// Filter by description substring after decryption
+		if desc != "" {
+			if !strings.Contains(strings.ToLower(rec.Description), strings.ToLower(desc)) {
+				continue // skip this record if description does not match
+			}
+		}
+
 		records = append(records, rec)
 	}
 
@@ -71,13 +164,13 @@ func GetRecords(c *gin.Context) {
 		return
 	}
 
-	slog.Info("Records retrieved successfully", "count", len(records))
+	slog.Info("Records retrieved successfully", "count", len(records), "filters_applied", len(filters) > 0 || desc != "")
 	c.JSON(http.StatusOK, records)
 }
 
 func GetRecord(c *gin.Context) {
 	idStr := c.Param("id")
-	
+
 	// Validate ID parameter
 	validator := validation.NewValidator()
 	id, validationErrs := validator.ValidateID(idStr)
@@ -174,7 +267,7 @@ func CreateRecord(c *gin.Context) {
 		errors.HandleError(c, appErr)
 		return
 	}
-	
+
 	rec.ID, err = strconv.Atoi(customId)
 	if err != nil {
 		appErr := errors.NewInternal("Failed to parse generated ID", err)
@@ -223,7 +316,7 @@ func CreateRecord(c *gin.Context) {
 
 func PatchRecord(c *gin.Context) {
 	idStr := c.Param("id")
-	
+
 	// Validate ID parameter
 	validator := validation.NewValidator()
 	id, validationErrs := validator.ValidateID(idStr)
@@ -291,7 +384,7 @@ func PatchRecord(c *gin.Context) {
 		errors.HandleError(c, appErr)
 		return
 	}
-	
+
 	if exists == 0 {
 		appErr := errors.NewNotFound(fmt.Sprintf("Record with ID %d not found", id), nil)
 		errors.HandleError(c, appErr)
@@ -322,7 +415,7 @@ func PatchRecord(c *gin.Context) {
 
 func DeleteRecord(c *gin.Context) {
 	idStr := c.Param("id")
-	
+
 	// Validate ID parameter
 	validator := validation.NewValidator()
 	id, validationErrs := validator.ValidateID(idStr)
@@ -344,7 +437,7 @@ func DeleteRecord(c *gin.Context) {
 		errors.HandleError(c, appErr)
 		return
 	}
-	
+
 	if rowsAffected == 0 {
 		appErr := errors.NewNotFound(fmt.Sprintf("Record with ID %d not found", id), nil)
 		errors.HandleError(c, appErr)
