@@ -76,6 +76,12 @@ func NewRoutes() Routes {
 			Pattern:     "/import/csv",
 			HandlerFunc: handlers.ImportCSV,
 		},
+		{
+			Name:        "ImportJSON",
+			Method:      "POST",
+			Pattern:     "/import/json",
+			HandlerFunc: handlers.ImportJSON,
+		},
 		// Categories
 		{
 			Name:        "GetCategories",
@@ -87,7 +93,7 @@ func NewRoutes() Routes {
 			Name:        "CreateCategory",
 			Method:      "POST",
 			Pattern:     "/categories",
-			HandlerFunc: handlers.CreateCategory,
+			HandlerFunc: handlers.CreateCategories,
 		},
 		{
 			Name:        "UpdateCategory",

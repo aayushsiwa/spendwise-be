@@ -2,14 +2,17 @@ package handlers
 
 import (
 	"database/sql"
-	"log"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 
 	"aayushsiwa/expense-tracker/db"
+	"aayushsiwa/expense-tracker/errors"
 	"aayushsiwa/expense-tracker/models"
 	"aayushsiwa/expense-tracker/secure"
 	"aayushsiwa/expense-tracker/utils"
+	"aayushsiwa/expense-tracker/validation"
 
 	"github.com/gin-gonic/gin"
 )
@@ -22,7 +25,8 @@ func GetRecords(c *gin.Context) {
 		ORDER BY r.date DESC
 	`)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve records"})
+		appErr := errors.NewDatabase("Failed to retrieve records", err)
+		errors.HandleError(c, appErr)
 		return
 	}
 	defer rows.Close()
@@ -32,24 +36,53 @@ func GetRecords(c *gin.Context) {
 		var rec models.Record
 		err := rows.Scan(&rec.ID, &rec.Date, &rec.Description, &rec.Category, &rec.Amount, &rec.Type, &rec.Notes)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read records"})
+			appErr := errors.NewDatabase("Failed to read record data", err)
+			errors.HandleError(c, appErr)
 			return
 		}
 
-		rec.Description, _ = secure.Decrypt(rec.Description)
-		rec.Notes, _ = secure.Decrypt(rec.Notes)
+		// Decrypt sensitive fields with proper error handling
+		if rec.Description != "" {
+			decrypted, err := secure.Decrypt(rec.Description)
+			if err != nil {
+				slog.Warn("Failed to decrypt description", "record_id", rec.ID, "error", err)
+				rec.Description = "[Encryption Error]"
+			} else {
+				rec.Description = decrypted
+			}
+		}
+
+		if rec.Notes != "" {
+			decrypted, err := secure.Decrypt(rec.Notes)
+			if err != nil {
+				slog.Warn("Failed to decrypt notes", "record_id", rec.ID, "error", err)
+				rec.Notes = "[Encryption Error]"
+			} else {
+				rec.Notes = decrypted
+			}
+		}
 
 		records = append(records, rec)
 	}
 
+	if err = rows.Err(); err != nil {
+		appErr := errors.NewDatabase("Error iterating through records", err)
+		errors.HandleError(c, appErr)
+		return
+	}
+
+	slog.Info("Records retrieved successfully", "count", len(records))
 	c.JSON(http.StatusOK, records)
 }
 
 func GetRecord(c *gin.Context) {
 	idStr := c.Param("id")
-	id, err := strconv.Atoi(idStr)
-	if err != nil || id <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+	
+	// Validate ID parameter
+	validator := validation.NewValidator()
+	id, validationErrs := validator.ValidateID(idStr)
+	if len(validationErrs) > 0 {
+		errors.HandleValidationErrors(c, validationErrs)
 		return
 	}
 
@@ -63,138 +96,268 @@ func GetRecord(c *gin.Context) {
 	var rec models.Record
 	if err := row.Scan(&rec.ID, &rec.Date, &rec.Description, &rec.Category, &rec.Amount, &rec.Type, &rec.Notes); err != nil {
 		if err == sql.ErrNoRows {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Record not found"})
+			appErr := errors.NewNotFound(fmt.Sprintf("Record with ID %d not found", id), err)
+			errors.HandleError(c, appErr)
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read record"})
+			appErr := errors.NewDatabase("Failed to read record", err)
+			errors.HandleError(c, appErr)
 		}
 		return
 	}
 
-	rec.Description, _ = secure.Decrypt(rec.Description)
-	rec.Notes, _ = secure.Decrypt(rec.Notes)
+	// Decrypt sensitive fields with proper error handling
+	if rec.Description != "" {
+		decrypted, err := secure.Decrypt(rec.Description)
+		if err != nil {
+			slog.Warn("Failed to decrypt description", "record_id", rec.ID, "error", err)
+			rec.Description = "[Encryption Error]"
+		} else {
+			rec.Description = decrypted
+		}
+	}
 
+	if rec.Notes != "" {
+		decrypted, err := secure.Decrypt(rec.Notes)
+		if err != nil {
+			slog.Warn("Failed to decrypt notes", "record_id", rec.ID, "error", err)
+			rec.Notes = "[Encryption Error]"
+		} else {
+			rec.Notes = decrypted
+		}
+	}
+
+	slog.Info("Record retrieved successfully", "record_id", rec.ID)
 	c.JSON(http.StatusOK, rec)
 }
 
 func CreateRecord(c *gin.Context) {
 	var rec models.Record
 	if err := c.ShouldBindJSON(&rec); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON body"})
+		appErr := errors.NewInvalidInput("Invalid JSON body", err)
+		errors.HandleError(c, appErr)
 		return
 	}
 
-	if rec.Date == "" || rec.Category == "" || rec.Amount <= 0 || rec.Type == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing or invalid record fields"})
+	// Validate record data
+	validator := validation.NewValidator()
+	validationErrs := validator.ValidateRecord(&rec)
+	if len(validationErrs) > 0 {
+		errors.HandleValidationErrors(c, validationErrs)
 		return
 	}
 
-	rec.Description, _ = secure.Encrypt(rec.Description)
-	rec.Notes, _ = secure.Encrypt(rec.Notes)
+	// Encrypt sensitive fields with proper error handling
+	if rec.Description != "" {
+		encrypted, err := secure.Encrypt(rec.Description)
+		if err != nil {
+			appErr := errors.NewEncryption("Failed to encrypt description", err)
+			errors.HandleError(c, appErr)
+			return
+		}
+		rec.Description = encrypted
+	}
 
-	customId, _ := utils.GenerateCustomID(rec.Date)
-	rec.ID, _ = strconv.Atoi(customId)
+	if rec.Notes != "" {
+		encrypted, err := secure.Encrypt(rec.Notes)
+		if err != nil {
+			appErr := errors.NewEncryption("Failed to encrypt notes", err)
+			errors.HandleError(c, appErr)
+			return
+		}
+		rec.Notes = encrypted
+	}
 
-	var categoryId int
-	err := db.DB.QueryRow("SELECT id FROM categories WHERE name = ?", rec.Category).Scan(&categoryId)
+	// Generate custom ID
+	customId, err := utils.GenerateCustomID(rec.Date)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid category"})
+		appErr := errors.NewInternal("Failed to generate record ID", err)
+		errors.HandleError(c, appErr)
+		return
+	}
+	
+	rec.ID, err = strconv.Atoi(customId)
+	if err != nil {
+		appErr := errors.NewInternal("Failed to parse generated ID", err)
+		errors.HandleError(c, appErr)
 		return
 	}
 
-	_, execErr := db.DB.Exec(`
+	// Get category ID
+	var categoryId int
+	err = db.DB.QueryRow("SELECT id FROM categories WHERE name = ?", rec.Category).Scan(&categoryId)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			appErr := errors.NewInvalidInput("Category not found", err).WithDetails(map[string]interface{}{
+				"category": rec.Category,
+			})
+			errors.HandleError(c, appErr)
+		} else {
+			appErr := errors.NewDatabase("Failed to find category", err)
+			errors.HandleError(c, appErr)
+		}
+		return
+	}
+
+	// Insert record
+	_, err = db.DB.Exec(`
 		INSERT INTO records (id, date, description, category_id, amount, type, notes)
 		VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		rec.ID, rec.Date, rec.Description, categoryId, rec.Amount, rec.Type, rec.Notes)
-	if execErr != nil {
-		log.Println("Error inserting record:", execErr)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to insert record"})
+	if err != nil {
+		appErr := errors.NewDatabase("Failed to insert record", err)
+		errors.HandleError(c, appErr)
 		return
 	}
 
-	UpdateSummary()
+	// Update summary
+	if err := UpdateSummary(); err != nil {
+		slog.Warn("Failed to update summary after record creation", "record_id", rec.ID, "error", err)
+	}
 
+	slog.Info("Record created successfully", "record_id", rec.ID)
 	c.JSON(http.StatusCreated, gin.H{
-		"message": "Created with ID - " + customId,
+		"message": fmt.Sprintf("Record with id %d created successfully", rec.ID),
 		"id":      rec.ID,
 	})
 }
 
 func PatchRecord(c *gin.Context) {
 	idStr := c.Param("id")
-	id, err := strconv.Atoi(idStr)
-	if err != nil || id <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+	
+	// Validate ID parameter
+	validator := validation.NewValidator()
+	id, validationErrs := validator.ValidateID(idStr)
+	if len(validationErrs) > 0 {
+		errors.HandleValidationErrors(c, validationErrs)
 		return
 	}
 
 	var rec models.Record
 	if err := c.ShouldBindJSON(&rec); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON body"})
+		appErr := errors.NewInvalidInput("Invalid JSON body", err)
+		errors.HandleError(c, appErr)
 		return
 	}
 
-	if rec.Date == "" || rec.Category == "" || rec.Amount <= 0 || rec.Type == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing or invalid fields"})
+	// Validate record data
+	validationErrs = validator.ValidateRecord(&rec)
+	if len(validationErrs) > 0 {
+		errors.HandleValidationErrors(c, validationErrs)
 		return
 	}
 
-	rec.Description, _ = secure.Encrypt(rec.Description)
-	rec.Notes, _ = secure.Encrypt(rec.Notes)
+	// Encrypt sensitive fields with proper error handling
+	if rec.Description != "" {
+		encrypted, err := secure.Encrypt(rec.Description)
+		if err != nil {
+			appErr := errors.NewEncryption("Failed to encrypt description", err)
+			errors.HandleError(c, appErr)
+			return
+		}
+		rec.Description = encrypted
+	}
 
+	if rec.Notes != "" {
+		encrypted, err := secure.Encrypt(rec.Notes)
+		if err != nil {
+			appErr := errors.NewEncryption("Failed to encrypt notes", err)
+			errors.HandleError(c, appErr)
+			return
+		}
+		rec.Notes = encrypted
+	}
+
+	// Get category ID
 	var categoryId int
-	err = db.DB.QueryRow("SELECT id FROM categories WHERE name = ?", rec.Category).Scan(&categoryId)
+	err := db.DB.QueryRow("SELECT id FROM categories WHERE name = ?", rec.Category).Scan(&categoryId)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid category"})
+		if err == sql.ErrNoRows {
+			appErr := errors.NewInvalidInput("Category not found", err).WithDetails(map[string]interface{}{
+				"category": rec.Category,
+			})
+			errors.HandleError(c, appErr)
+		} else {
+			appErr := errors.NewDatabase("Failed to find category", err)
+			errors.HandleError(c, appErr)
+		}
 		return
 	}
 
+	// Check if record exists
 	var exists int
 	err = db.DB.QueryRow("SELECT COUNT(*) FROM records WHERE id = ?", id).Scan(&exists)
-	if err != nil || exists == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found"})
+	if err != nil {
+		appErr := errors.NewDatabase("Failed to check record existence", err)
+		errors.HandleError(c, appErr)
+		return
+	}
+	
+	if exists == 0 {
+		appErr := errors.NewNotFound(fmt.Sprintf("Record with ID %d not found", id), nil)
+		errors.HandleError(c, appErr)
 		return
 	}
 
+	// Update record
 	_, err = db.DB.Exec(`
 		UPDATE records 
 		SET date = ?, description = ?, category_id = ?, amount = ?, type = ?, notes = ?
 		WHERE id = ?`,
 		rec.Date, rec.Description, categoryId, rec.Amount, rec.Type, rec.Notes, id)
 	if err != nil {
-		log.Println("Error updating record:", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update record"})
+		appErr := errors.NewDatabase("Failed to update record", err)
+		errors.HandleError(c, appErr)
 		return
 	}
 
-	UpdateSummary()
+	// Update summary
+	if err := UpdateSummary(); err != nil {
+		slog.Warn("Failed to update summary after record update", "record_id", id, "error", err)
+	}
 
 	rec.ID = id
+	slog.Info("Record updated successfully", "record_id", rec.ID)
 	c.JSON(http.StatusOK, rec)
 }
 
 func DeleteRecord(c *gin.Context) {
 	idStr := c.Param("id")
-	id, err := strconv.Atoi(idStr)
-	if err != nil || id <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+	
+	// Validate ID parameter
+	validator := validation.NewValidator()
+	id, validationErrs := validator.ValidateID(idStr)
+	if len(validationErrs) > 0 {
+		errors.HandleValidationErrors(c, validationErrs)
 		return
 	}
 
 	res, err := db.DB.Exec(`DELETE FROM records WHERE id = ?`, id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete record"})
+		appErr := errors.NewDatabase("Failed to delete record", err)
+		errors.HandleError(c, appErr)
 		return
 	}
 
-	rowsAffected, _ := res.RowsAffected()
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		appErr := errors.NewDatabase("Failed to get affected rows", err)
+		errors.HandleError(c, appErr)
+		return
+	}
+	
 	if rowsAffected == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found"})
+		appErr := errors.NewNotFound(fmt.Sprintf("Record with ID %d not found", id), nil)
+		errors.HandleError(c, appErr)
 		return
 	}
 
-	UpdateSummary()
+	// Update summary
+	if err := UpdateSummary(); err != nil {
+		slog.Warn("Failed to update summary after record deletion", "record_id", id, "error", err)
+	}
 
+	slog.Info("Record deleted successfully", "record_id", id)
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Record with id " + strconv.Itoa(id) + " deleted successfully",
+		"message": fmt.Sprintf("Record with id %d deleted successfully", id),
 	})
 }

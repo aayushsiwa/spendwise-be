@@ -2,26 +2,34 @@ package handlers
 
 import (
 	"aayushsiwa/expense-tracker/db"
-	"log"
+	"aayushsiwa/expense-tracker/errors"
+	"log/slog"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 )
 
-func UpdateSummary() {
+// UpdateSummary updates the summary table and returns an error if it fails
+func UpdateSummary() error {
+	slog.Info("Updating summary...")
+	
 	tx, err := db.DB.Begin()
 	if err != nil {
-		log.Printf("Failed to begin transaction: %v", err)
-		return
+		slog.Error("Failed to begin transaction", "error", err)
+		return errors.NewDatabase("Failed to begin transaction", err)
 	}
-	defer tx.Commit()
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
 
 	// Clear existing summary
 	_, err = tx.Exec("DELETE FROM summary")
 	if err != nil {
-		log.Printf("Failed to clear summary: %v", err)
-		return
+		slog.Error("Failed to clear summary", "error", err)
+		return errors.NewDatabase("Failed to clear summary", err)
 	}
 
 	// Get all months in chronological order
@@ -36,8 +44,8 @@ func UpdateSummary() {
 		ORDER BY month ASC
 	`)
 	if err != nil {
-		log.Printf("Failed to aggregate records: %v", err)
-		return
+		slog.Error("Failed to aggregate records", "error", err)
+		return errors.NewDatabase("Failed to aggregate records", err)
 	}
 	defer rows.Close()
 
@@ -48,8 +56,8 @@ func UpdateSummary() {
 		var income, expense, transfer float64
 
 		if err := rows.Scan(&month, &income, &expense, &transfer); err != nil {
-			log.Printf("Row scan error: %v", err)
-			return
+			slog.Error("Row scan error", "error", err)
+			return errors.NewDatabase("Failed to scan summary row", err)
 		}
 
 		netBalance := income - expense + transfer
@@ -61,17 +69,34 @@ func UpdateSummary() {
 		`, month, income, expense, openingBalance, netBalance, closingBalance)
 
 		if err != nil {
-			log.Printf("Insert summary error for month %s: %v", month, err)
-			return
+			slog.Error("Insert summary error", "month", month, "error", err)
+			return errors.NewDatabase("Failed to insert summary for month", err)
 		}
 
 		openingBalance = closingBalance // carry forward for next month
 	}
+
+	if err = rows.Err(); err != nil {
+		slog.Error("Error iterating through summary rows", "error", err)
+		return errors.NewDatabase("Error iterating through summary rows", err)
+	}
+
+	if err = tx.Commit(); err != nil {
+		slog.Error("Failed to commit transaction", "error", err)
+		return errors.NewDatabase("Failed to commit summary transaction", err)
+	}
+
+	slog.Info("Summary updated successfully")
+	return nil
 }
 
 func GetSummary(c *gin.Context) {
 	// Ensure the summary table is updated before fetching
-	UpdateSummary()
+	if err := UpdateSummary(); err != nil {
+		errors.HandleError(c, err)
+		return
+	}
+	
 	rows, err := db.DB.Query(`
 	SELECT 
 		month, total_income, total_expense,
@@ -80,7 +105,8 @@ func GetSummary(c *gin.Context) {
 `)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch summary"})
+		appErr := errors.NewDatabase("Failed to fetch summary", err)
+		errors.HandleError(c, appErr)
 		return
 	}
 	defer rows.Close()
@@ -93,7 +119,8 @@ func GetSummary(c *gin.Context) {
 		err := rows.Scan(&month, &income, &expense, &opening, &net, &closing)
 
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse summary row"})
+			appErr := errors.NewDatabase("Failed to parse summary row", err)
+			errors.HandleError(c, appErr)
 			return
 		}
 		summaries = append(summaries, gin.H{
@@ -106,14 +133,26 @@ func GetSummary(c *gin.Context) {
 		})
 	}
 
+	if err = rows.Err(); err != nil {
+		appErr := errors.NewDatabase("Error iterating through summary rows", err)
+		errors.HandleError(c, appErr)
+		return
+	}
+
+	slog.Info("Summary retrieved successfully", "count", len(summaries))
 	c.JSON(http.StatusOK, summaries)
 }
 
 func GetSummaryForFilter(c *gin.Context) {
-	UpdateSummary()
+	if err := UpdateSummary(); err != nil {
+		errors.HandleError(c, err)
+		return
+	}
+	
 	pathParts := strings.Split(c.Request.URL.Path, "/")
 	if len(pathParts) < 2 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid URL path"})
+		appErr := errors.NewInvalidInput("Invalid URL path", nil)
+		errors.HandleError(c, appErr)
 		return
 	}
 	filterType := pathParts[len(pathParts)-2]
@@ -127,7 +166,11 @@ func GetSummaryForFilter(c *gin.Context) {
 	case "type":
 		GetSummaryByType(c, value)
 	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid filter type"})
+		appErr := errors.NewInvalidInput("Invalid filter type", nil).WithDetails(map[string]interface{}{
+			"filter_type": filterType,
+			"allowed_types": []string{"month", "category", "type"},
+		})
+		errors.HandleError(c, appErr)
 	}
 }
 
@@ -140,10 +183,14 @@ func GetSummaryByMonth(c *gin.Context, month string) {
 	var income, expense, openingBalance, netBalance, closingBalance float64
 	err := row.Scan(&income, &expense, &openingBalance, &netBalance, &closingBalance)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "No summary found for month"})
+		appErr := errors.NewNotFound("No summary found for month", err).WithDetails(map[string]interface{}{
+			"month": month,
+		})
+		errors.HandleError(c, appErr)
 		return
 	}
 
+	slog.Info("Monthly summary retrieved", "month", month)
 	c.JSON(http.StatusOK, gin.H{
 		"month":           month,
 		"total_income":    income,
@@ -166,13 +213,23 @@ func GetSummaryByCategory(c *gin.Context, category string) {
 
 	var income, expense float64
 	err := row.Scan(&income, &expense)
-	if err != nil || (income == 0 && expense == 0) {
-		c.JSON(http.StatusNotFound, gin.H{"error": "No data for category"})
+	if err != nil {
+		appErr := errors.NewDatabase("Failed to get category summary", err)
+		errors.HandleError(c, appErr)
+		return
+	}
+	
+	if income == 0 && expense == 0 {
+		appErr := errors.NewNotFound("No data found for category", nil).WithDetails(map[string]interface{}{
+			"category": category,
+		})
+		errors.HandleError(c, appErr)
 		return
 	}
 
 	netBalance := income - expense
 
+	slog.Info("Category summary retrieved", "category", category)
 	c.JSON(http.StatusOK, gin.H{
 		"category":        category,
 		"total_income":    income,
@@ -184,7 +241,11 @@ func GetSummaryByCategory(c *gin.Context, category string) {
 
 func GetSummaryByType(c *gin.Context, recordType string) {
 	if recordType != "income" && recordType != "expense" && recordType != "transfer" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid type"})
+		appErr := errors.NewInvalidInput("Invalid record type", nil).WithDetails(map[string]interface{}{
+			"type": recordType,
+			"allowed_types": []string{"income", "expense", "transfer"},
+		})
+		errors.HandleError(c, appErr)
 		return
 	}
 
@@ -193,12 +254,18 @@ func GetSummaryByType(c *gin.Context, recordType string) {
 	err := db.DB.QueryRow(`
 		SELECT SUM(amount) FROM records WHERE type = ?
 	`, recordType).Scan(&total)
-	if total == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "No records found for type " + recordType})
+	
+	if err != nil {
+		appErr := errors.NewDatabase("Failed to get type summary", err)
+		errors.HandleError(c, appErr)
 		return
 	}
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get total"})
+	
+	if total == 0 {
+		appErr := errors.NewNotFound("No records found for type", nil).WithDetails(map[string]interface{}{
+			"type": recordType,
+		})
+		errors.HandleError(c, appErr)
 		return
 	}
 
@@ -208,6 +275,7 @@ func GetSummaryByType(c *gin.Context, recordType string) {
 		netBalance = -total
 	}
 
+	slog.Info("Type summary retrieved", "type", recordType, "total", total)
 	c.JSON(http.StatusOK, gin.H{
 		"type":            recordType,
 		"total":           total,

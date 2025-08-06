@@ -2,3 +2,4 @@
 backend/tmp
 backend/records.db
 backend/.env
+expense-tracker
