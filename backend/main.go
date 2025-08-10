@@ -58,14 +58,14 @@ func main() {
 	}
 
 	server := gin.New()
-	
+
 	// Add middleware in order
-	server.Use(middleware.ErrorHandler())      // Panic recovery
-	server.Use(middleware.SecurityHeaders())   // Security headers
-	server.Use(middleware.RateLimiter())       // Rate limiting
-	server.Use(middleware.RequestLogger())     // Request logging
+	server.Use(middleware.ErrorHandler())    // Panic recovery
+	server.Use(middleware.SecurityHeaders()) // Security headers
+	// server.Use(middleware.RateLimiter())       // Rate limiting
+	server.Use(middleware.RequestLogger())          // Request logging
 	server.Use(middleware.ValidationErrorHandler()) // Validation error handling
-	
+
 	// Add CORS middleware
 	server.Use(func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
@@ -120,7 +120,7 @@ func main() {
 
 	// Wait for shutdown signal
 	<-ctx.Done()
-	
+
 	// Cleanup
 	slog.Info("Shutting down server...")
 	if err := db.Close(); err != nil {

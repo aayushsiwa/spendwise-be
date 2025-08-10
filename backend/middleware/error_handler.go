@@ -15,7 +15,7 @@ import (
 func ErrorHandler() gin.HandlerFunc {
 	return gin.CustomRecovery(func(c *gin.Context, recovered interface{}) {
 		if err, ok := recovered.(string); ok {
-			slog.Error("Panic recovered", 
+			slog.Error("Panic recovered",
 				"error", err,
 				"method", c.Request.Method,
 				"path", c.Request.URL.Path,
@@ -86,44 +86,44 @@ func RequestLogger() gin.HandlerFunc {
 }
 
 // RateLimiter middleware for basic rate limiting
-func RateLimiter() gin.HandlerFunc {
-	// Simple in-memory rate limiter
-	// In production, you might want to use Redis or a more sophisticated solution
-	clients := make(map[string][]time.Time)
-	
-	return func(c *gin.Context) {
-		clientIP := c.ClientIP()
-		now := time.Now()
-		
-		// Clean old entries (older than 1 minute)
-		if times, exists := clients[clientIP]; exists {
-			var validTimes []time.Time
-			for _, t := range times {
-				if now.Sub(t) < time.Minute {
-					validTimes = append(validTimes, t)
-				}
-			}
-			clients[clientIP] = validTimes
-		}
-		
-		// Check rate limit (100 requests per minute)
-		if times, exists := clients[clientIP]; exists && len(times) >= 100 {
-			slog.Warn("Rate limit exceeded", "ip", clientIP, "requests", len(times))
-			c.JSON(http.StatusTooManyRequests, gin.H{
-				"error": gin.H{
-					"type":    "rate_limit_exceeded",
-					"message": "Too many requests",
-				},
-			})
-			c.Abort()
-			return
-		}
-		
-		// Add current request
-		clients[clientIP] = append(clients[clientIP], now)
-		c.Next()
-	}
-}
+// func RateLimiter() gin.HandlerFunc {
+// 	// Simple in-memory rate limiter
+// 	// In production, you might want to use Redis or a more sophisticated solution
+// 	clients := make(map[string][]time.Time)
+
+// 	return func(c *gin.Context) {
+// 		clientIP := c.ClientIP()
+// 		now := time.Now()
+
+// 		// Clean old entries (older than 1 minute)
+// 		if times, exists := clients[clientIP]; exists {
+// 			var validTimes []time.Time
+// 			for _, t := range times {
+// 				if now.Sub(t) < time.Minute {
+// 					validTimes = append(validTimes, t)
+// 				}
+// 			}
+// 			clients[clientIP] = validTimes
+// 		}
+
+// 		// Check rate limit (100 requests per minute)
+// 		if times, exists := clients[clientIP]; exists && len(times) >= 100 {
+// 			slog.Warn("Rate limit exceeded", "ip", clientIP, "requests", len(times))
+// 			c.JSON(http.StatusTooManyRequests, gin.H{
+// 				"error": gin.H{
+// 					"type":    "rate_limit_exceeded",
+// 					"message": "Too many requests",
+// 				},
+// 			})
+// 			c.Abort()
+// 			return
+// 		}
+
+// 		// Add current request
+// 		clients[clientIP] = append(clients[clientIP], now)
+// 		c.Next()
+// 	}
+// }
 
 // SecurityHeaders middleware for adding security headers
 func SecurityHeaders() gin.HandlerFunc {
@@ -134,7 +134,7 @@ func SecurityHeaders() gin.HandlerFunc {
 		c.Header("X-XSS-Protection", "1; mode=block")
 		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
 		c.Header("Content-Security-Policy", "default-src 'self'")
-		
+
 		c.Next()
 	}
 }
@@ -143,7 +143,7 @@ func SecurityHeaders() gin.HandlerFunc {
 func ValidationErrorHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Next()
-		
+
 		// Check for validation errors
 		if len(c.Errors) > 0 {
 			for _, err := range c.Errors {
@@ -154,4 +154,4 @@ func ValidationErrorHandler() gin.HandlerFunc {
 			}
 		}
 	}
-} 
+}
