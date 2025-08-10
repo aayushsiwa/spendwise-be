@@ -64,7 +64,13 @@ func NewRoutes() Routes {
 			HandlerFunc: handlers.GetSummary,
 		},
 		{
-			Name:        "GetSummaryForFilter",
+			Name:        "GetSummaryForFilters",
+			Method:      "GET",
+			Pattern:     "/summary/filter",
+			HandlerFunc: handlers.GetSummaryForFilters,
+		},
+		{
+			Name:        "GetSummaryForFilters",
 			Method:      "GET",
 			Pattern:     "/summary/:filter/:value",
 			HandlerFunc: handlers.GetSummaryForFilter,
