@@ -232,7 +232,7 @@ func GetRecords(c *gin.Context) {
 
 	// Return response with pagination metadata
 	response := gin.H{
-		"data": records,
+		"records": records,
 		"pagination": gin.H{
 			"page":        page,
 			"limit":       limit,

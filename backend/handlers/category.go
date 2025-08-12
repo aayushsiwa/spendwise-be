@@ -39,7 +39,7 @@ func GetCategories(c *gin.Context) {
 	}
 
 	slog.Info("Categories retrieved successfully", "count", len(categories))
-	c.JSON(http.StatusOK, categories)
+	c.JSON(http.StatusOK, gin.H{"categories": categories})
 }
 
 func GetCategoryRecords(c *gin.Context) {
