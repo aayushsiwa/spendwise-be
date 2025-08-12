@@ -1,8 +1,0 @@
-
-.env.example
-*.log
-tmp/
-sql/
-*.md
-.git
-.vscode

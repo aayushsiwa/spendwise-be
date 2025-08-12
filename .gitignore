@@ -1,6 +1,4 @@
-# backend
-backend/tmp
-backend/records.db
-backend/.env
+records.db*
+.env
 expense-tracker
-backend/main
+main
