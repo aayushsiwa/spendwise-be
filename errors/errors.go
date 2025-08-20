@@ -14,16 +14,16 @@ import (
 
 // Error types for different scenarios
 var (
-	ErrInvalidInput     = errors.New("invalid input")
-	ErrNotFound         = errors.New("not found")
-	ErrDatabase         = errors.New("database error")
-	ErrEncryption       = errors.New("encryption error")
-	ErrValidation       = errors.New("validation error")
-	ErrInternal         = errors.New("internal server error")
-	ErrUnauthorized     = errors.New("unauthorized")
-	ErrForbidden        = errors.New("forbidden")
-	ErrConflict         = errors.New("conflict")
-	ErrBadRequest       = errors.New("bad request")
+	ErrInvalidInput = errors.New("invalid input")
+	ErrNotFound     = errors.New("not found")
+	ErrDatabase     = errors.New("database error")
+	ErrEncryption   = errors.New("encryption error")
+	ErrValidation   = errors.New("validation error")
+	ErrInternal     = errors.New("internal server error")
+	ErrUnauthorized = errors.New("unauthorized")
+	ErrForbidden    = errors.New("forbidden")
+	ErrConflict     = errors.New("conflict")
+	ErrBadRequest   = errors.New("bad request")
 )
 
 // AppError represents a structured application error
@@ -79,15 +79,15 @@ func (e *AppError) Log() {
 		"message", e.Message,
 		"status_code", e.StatusCode,
 	}
-	
+
 	if e.Err != nil {
 		attrs = append(attrs, "underlying_error", e.Err.Error())
 	}
-	
+
 	for k, v := range e.Context {
 		attrs = append(attrs, k, v)
 	}
-	
+
 	slog.Error("application error", attrs...)
 }
 
@@ -131,7 +131,7 @@ func NewConflict(message string, err error) *AppError {
 // HandleError handles errors and sends appropriate HTTP responses
 func HandleError(c *gin.Context, err error) {
 	var appErr *AppError
-	
+
 	// Check if it's already an AppError
 	if errors.As(err, &appErr) {
 		appErr.Log()
@@ -144,7 +144,7 @@ func HandleError(c *gin.Context, err error) {
 		})
 		return
 	}
-	
+
 	// Handle database errors
 	if errors.Is(err, sql.ErrNoRows) {
 		appErr = NewNotFound("Resource not found", err)
@@ -154,12 +154,12 @@ func HandleError(c *gin.Context, err error) {
 		// Default to internal server error
 		appErr = NewInternal("An unexpected error occurred", err)
 	}
-	
+
 	// Add context for debugging
 	appErr.WithContext("handler", getHandlerName())
 	appErr.WithContext("method", c.Request.Method)
 	appErr.WithContext("path", c.Request.URL.Path)
-	
+
 	appErr.Log()
 	c.JSON(appErr.StatusCode, gin.H{
 		"error": gin.H{
@@ -184,8 +184,8 @@ func getHandlerName() string {
 
 // ValidationError represents a validation error with field-specific details
 type ValidationError struct {
-	Field   string `json:"field"`
-	Message string `json:"message"`
+	Field   string      `json:"field"`
+	Message string      `json:"message"`
 	Value   interface{} `json:"value,omitempty"`
 }
 
@@ -197,7 +197,7 @@ func (v ValidationErrors) Error() string {
 	if len(v) == 0 {
 		return "no validation errors"
 	}
-	
+
 	messages := make([]string, len(v))
 	for i, err := range v {
 		messages[i] = fmt.Sprintf("%s: %s", err.Field, err.Message)
@@ -237,4 +237,4 @@ func HandleValidationErrors(c *gin.Context, validationErrs ValidationErrors) {
 			"details": appErr.Details,
 		},
 	})
-} 
+}

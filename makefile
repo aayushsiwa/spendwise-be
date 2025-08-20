@@ -98,7 +98,6 @@ check: ## Run go vet and go fmt
 pre-push: check test ## Run all pre-push checks (fmt, vet, test)
 	@echo "✅ Pre-push checks passed"
 
-
 ## Show help for all commands
 help:
 	@echo ""

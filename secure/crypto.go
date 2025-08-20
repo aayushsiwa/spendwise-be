@@ -63,7 +63,7 @@ func Encrypt(plain string) (string, error) {
 
 	ciphertext := aesgcm.Seal(nonce, nonce, []byte(plain), nil)
 	encoded := base64.StdEncoding.EncodeToString(ciphertext)
-	
+
 	slog.Debug("Text encrypted successfully", "length", len(plain))
 	return encoded, nil
 }
