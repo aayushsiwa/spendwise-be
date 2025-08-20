@@ -30,8 +30,12 @@ migrationdown: ## Revert the migration and drop data from db
 ## Remove the SQLite database file
 clean: ## Remove the SQLite db file
 	@echo "Removing $(DB_PATH) $(DB_PATH)-shm $(DB_PATH)-wal ..."
-	@rm -f $(DB_PATH) $(DB_PATH)-shm $(DB_PATH)-wal 
-	@echo "Deleted $(DB_PATH)."
+	@if rm -f $(DB_PATH) $(DB_PATH)-shm $(DB_PATH)-wal; then \
+		echo "Deleted $(DB_PATH)."; \
+	else \
+		echo "Failed to remove database files"; \
+	fi
+
 
 ## Start the development server with Air for live reloading
 dev: ## Start the development server with Air for live reloading
@@ -70,6 +74,30 @@ push: ## Push the Docker image to Docker Hub
 	@echo "Pushing Docker image to Docker Hub..."
 	docker push $(IMAGE_NAME)
 	@echo "Image pushed: $(IMAGE_NAME)"
+
+## Run Go tests
+test: ## Run Go unit tests
+	@echo "Running tests..."
+	go test ./...
+	@echo "✅ Tests passed"
+
+## Run go vet and go fmt
+check: ## Run go vet and go fmt
+	@echo "Running go fmt..."
+	@unformatted=$$(go fmt ./...); \
+	if [ -n "$$unformatted" ]; then \
+		echo "❌ Unformatted files found:"; \
+		echo "$$unformatted"; \
+		exit 1; \
+	fi
+	@echo "Running go vet..."
+	go vet ./...
+	@echo "✅ Formatting and vetting passed"
+
+## Run all checks before push
+pre-push: check test ## Run all pre-push checks (fmt, vet, test)
+	@echo "✅ Pre-push checks passed"
+
 
 ## Show help for all commands
 help:
