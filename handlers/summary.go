@@ -3,6 +3,7 @@ package handlers
 import (
 	"aayushsiwa/expense-tracker/db"
 	"aayushsiwa/expense-tracker/errors"
+	"aayushsiwa/expense-tracker/models"
 	"aayushsiwa/expense-tracker/utils"
 	"aayushsiwa/expense-tracker/validation"
 	"fmt"
@@ -28,38 +29,35 @@ func UpdateSummary() error {
 		}
 	}()
 
-	// Clear existing summary
-	_, err = tx.Exec("DELETE FROM summary")
-	if err != nil {
-		slog.Error("Failed to clear summary", "error", err)
+	// Clear old data
+	if _, err = tx.Exec("DELETE FROM summary"); err != nil {
 		return errors.NewDatabase("Failed to clear summary", err)
 	}
+	if _, err = tx.Exec("DELETE FROM summary_details"); err != nil {
+		return errors.NewDatabase("Failed to clear summary_details", err)
+	}
 
-	// Get all months in chronological order
+	// Get all months
 	rows, err := tx.Query(`
-		SELECT
-			strftime('%Y-%m', date) AS month,
-			SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) AS total_income,
-			SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) AS total_expense,
-			SUM(CASE WHEN type = 'transfer' THEN amount ELSE 0 END) AS total_transfer
-		FROM records
-		GROUP BY month
-		ORDER BY month ASC
-	`)
+        SELECT
+            strftime('%Y-%m', date) AS month,
+            SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) AS total_income,
+            SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) AS total_expense,
+            SUM(CASE WHEN type = 'transfer' THEN amount ELSE 0 END) AS total_transfer
+        FROM records
+        GROUP BY month
+        ORDER BY month ASC
+    `)
 	if err != nil {
-		slog.Error("Failed to aggregate records", "error", err)
 		return errors.NewDatabase("Failed to aggregate records", err)
 	}
 	defer rows.Close()
 
-	var openingBalance float64 = 0
-
+	var openingBalance float64
 	for rows.Next() {
 		var month string
 		var income, expense, transfer float64
-
 		if err := rows.Scan(&month, &income, &expense, &transfer); err != nil {
-			slog.Error("Row scan error", "error", err)
 			return errors.NewDatabase("Failed to scan summary row", err)
 		}
 
@@ -67,25 +65,40 @@ func UpdateSummary() error {
 		closingBalance := openingBalance + netBalance
 
 		_, err = tx.Exec(`
-			INSERT INTO summary (month, total_income, total_expense, opening_balance, net_balance, closing_balance)
-			VALUES (?, ?, ?, ?, ?, ?)
-		`, month, income, expense, openingBalance, netBalance, closingBalance)
-
+            INSERT INTO summary (month, total_income, total_expense, opening_balance, net_balance, closing_balance)
+            VALUES (?, ?, ?, ?, ?, ?)
+        `, month, income, expense, openingBalance, netBalance, closingBalance)
 		if err != nil {
-			slog.Error("Insert summary error", "month", month, "error", err)
 			return errors.NewDatabase("Failed to insert summary for month", err)
 		}
 
-		openingBalance = closingBalance // carry forward for next month
+		openingBalance = closingBalance
 	}
 
-	if err = rows.Err(); err != nil {
-		slog.Error("Error iterating through summary rows", "error", err)
-		return errors.NewDatabase("Error iterating through summary rows", err)
+	// Populate summary_details for fast API
+	_, err = tx.Exec(`
+    INSERT INTO summary_details (month, type, category_id, category_name, amount)
+    SELECT
+        strftime('%Y-%m', r.date) AS month,
+        r.type,
+        c.id AS category_id,
+        c.name AS category_name,
+        SUM(r.amount) AS amount
+    FROM records r
+    JOIN categories c ON r.category_id = c.id
+    WHERE r.type IN ('income', 'expense', 'transfer')
+    GROUP BY
+		month,
+        r.type,
+        c.id,
+        c.name
+	`)
+
+	if err != nil {
+		return errors.NewDatabase("Failed to insert summary details", err)
 	}
 
 	if err = tx.Commit(); err != nil {
-		slog.Error("Failed to commit transaction", "error", err)
 		return errors.NewDatabase("Failed to commit summary transaction", err)
 	}
 
@@ -94,56 +107,85 @@ func UpdateSummary() error {
 }
 
 func GetSummary(c *gin.Context) {
-	// Ensure the summary table is updated before fetching
 	if err := UpdateSummary(); err != nil {
 		errors.HandleError(c, err)
 		return
 	}
 
+	// Step 1: Fetch monthly totals
 	rows, err := db.DB.Query(`
-	SELECT 
-		month, total_income, total_expense,
-		opening_balance, net_balance, closing_balance 
-	FROM summary ORDER BY month DESC
-`)
-
+        SELECT month, total_income, total_expense, opening_balance, net_balance, closing_balance 
+        FROM summary ORDER BY month DESC
+    `)
 	if err != nil {
-		appErr := errors.NewDatabase("Failed to fetch summary", err)
-		errors.HandleError(c, appErr)
+		errors.HandleError(c, errors.NewDatabase("Failed to fetch summary", err))
 		return
 	}
 	defer rows.Close()
 
-	var summaries []map[string]interface{}
+	summaries := make(map[string]models.MonthlySummary)
 
 	for rows.Next() {
 		var month string
 		var income, expense, opening, net, closing float64
-		err := rows.Scan(&month, &income, &expense, &opening, &net, &closing)
-
-		if err != nil {
-			appErr := errors.NewDatabase("Failed to parse summary row", err)
-			errors.HandleError(c, appErr)
+		if err := rows.Scan(&month, &income, &expense, &opening, &net, &closing); err != nil {
+			errors.HandleError(c, errors.NewDatabase("Failed to parse summary row", err))
 			return
 		}
-		summaries = append(summaries, gin.H{
-			"month":           month,
-			"total_income":    income,
-			"total_expense":   expense,
-			"opening_balance": opening,
-			"net_balance":     net,
-			"closing_balance": closing,
-		})
+		summaries[month] = models.MonthlySummary{
+			Expenses:     []models.CategoryDetail{},
+			Incomes:      []models.CategoryDetail{},
+			Net:          net,
+			Opening:      opening,
+			Closing:      closing,
+			TotalExpense: expense,
+			TotalIncome:  income,
+		}
 	}
 
-	if err = rows.Err(); err != nil {
-		appErr := errors.NewDatabase("Error iterating through summary rows", err)
-		errors.HandleError(c, appErr)
+	// Step 2: Fetch details
+	detailRows, err := db.DB.Query(`
+    SELECT 
+        month, 
+        type, 
+        category_id, 
+        category_name, 
+        SUM(amount) as total_amount
+    FROM summary_details
+    GROUP BY month, type, category_id, category_name
+	`)
+	if err != nil {
+		errors.HandleError(c, errors.NewDatabase("Failed to fetch summary details", err))
 		return
 	}
+	defer detailRows.Close()
 
-	slog.Info("Summary retrieved successfully", "count", len(summaries))
-	c.JSON(http.StatusOK, summaries)
+	for detailRows.Next() {
+		var month, recordType, categoryName string
+		var categoryID int
+		var totalAmount float64
+
+		if err := detailRows.Scan(&month, &recordType, &categoryID, &categoryName, &totalAmount); err != nil {
+			errors.HandleError(c, errors.NewDatabase("Failed to parse summary detail row", err))
+			return
+		}
+
+		summary := summaries[month]
+		detail := models.CategoryDetail{
+			CategoryID: categoryID,
+			Category:   categoryName,
+			Amount:     totalAmount,
+		}
+
+		if recordType == "income" {
+			summary.Incomes = append(summary.Incomes, detail)
+		} else {
+			summary.Expenses = append(summary.Expenses, detail)
+		}
+		summaries[month] = summary
+	}
+
+	c.JSON(http.StatusOK, gin.H{"summary": summaries})
 }
 
 func GetSummaryForFilters(c *gin.Context) {
@@ -305,14 +347,20 @@ func GetSummaryForFilter(c *gin.Context) {
 }
 
 func GetSummaryByMonth(c *gin.Context, month string) {
+	// Get overall monthly totals
 	row := db.DB.QueryRow(`
-	SELECT total_income, total_expense, opening_balance, net_balance, closing_balance
-	FROM summary WHERE month = ?
-`, month)
+		SELECT 
+			total_income, 
+			total_expense, 
+			opening_balance, 
+			net_balance, 
+			closing_balance
+		FROM summary
+		WHERE month = ?
+	`, month)
 
-	var income, expense, openingBalance, netBalance, closingBalance float64
-	err := row.Scan(&income, &expense, &openingBalance, &netBalance, &closingBalance)
-	if err != nil {
+	var totalIncome, totalExpense, openingBalance, netBalance, closingBalance float64
+	if err := row.Scan(&totalIncome, &totalExpense, &openingBalance, &netBalance, &closingBalance); err != nil {
 		appErr := errors.NewNotFound("No summary found for month", err).WithDetails(map[string]interface{}{
 			"month": month,
 		})
@@ -320,14 +368,62 @@ func GetSummaryByMonth(c *gin.Context, month string) {
 		return
 	}
 
+	// Get category breakdowns for that month
+	rows, err := db.DB.Query(`
+		SELECT 
+			type, 
+			category_id, 
+			category_name, 
+			SUM(amount) AS amount
+		FROM summary_details
+		WHERE month = ?
+		GROUP BY type, category_id, category_name
+	`, month)
+	if err != nil {
+		appErr := errors.NewDatabase("Failed to get summary details", err)
+		errors.HandleError(c, appErr)
+		return
+	}
+	defer rows.Close()
+
+	var incomes []models.CategoryDetail
+	var expenses []models.CategoryDetail
+
+	for rows.Next() {
+		var recordType, categoryName string
+		var categoryID int
+		var amount float64
+
+		if err := rows.Scan(&recordType, &categoryID, &categoryName, &amount); err != nil {
+			appErr := errors.NewDatabase("Failed to parse summary detail row", err)
+			errors.HandleError(c, appErr)
+			return
+		}
+
+		detail := models.CategoryDetail{
+			CategoryID: categoryID,
+			Category:   categoryName,
+			Amount:     amount,
+		}
+
+		if recordType == "income" {
+			incomes = append(incomes, detail)
+		} else if recordType == "expense" {
+			expenses = append(expenses, detail)
+		}
+	}
+
 	slog.Info("Monthly summary retrieved", "month", month)
 	c.JSON(http.StatusOK, gin.H{
-		"month":           month,
-		"total_income":    income,
-		"total_expense":   expense,
-		"opening_balance": openingBalance,
-		"net_balance":     netBalance,
-		"closing_balance": closingBalance,
+		"summary": models.MonthlySummary{
+			Expenses:     expenses,
+			Incomes:      incomes,
+			Net:          netBalance,
+			Opening:      openingBalance,
+			Closing:      closingBalance,
+			TotalExpense: totalExpense,
+			TotalIncome:  totalIncome,
+		},
 	})
 }
 
