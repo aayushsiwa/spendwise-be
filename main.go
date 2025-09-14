@@ -12,6 +12,7 @@ import (
 	"aayushsiwa/expense-tracker/routes"
 	"aayushsiwa/expense-tracker/secure"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -66,18 +67,30 @@ func main() {
 	server.Use(middleware.RequestLogger())          // Request logging
 	server.Use(middleware.ValidationErrorHandler()) // Validation error handling
 
-	// Add CORS middleware
+	// Log the Origin header for every request
 	server.Use(func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization")
-
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(204)
-			return
+		origin := c.Request.Header.Get("Origin")
+		if origin == "" {
+			origin = c.Request.Header.Get("Referer")
+			if origin == "" {
+				origin = "<none>"
+			}
 		}
+
+		slog.Info("Incoming request",
+			"method", c.Request.Method,
+			"path", c.Request.URL.Path,
+			"origin", origin,
+		)
 		c.Next()
 	})
+
+	// Add CORS middleware
+	server.Use(cors.New(cors.Config{
+		AllowOrigins: []string{"*"},
+		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"},
+		AllowHeaders: []string{"Origin", "Content-Type", "Authorization"},
+	}))
 
 	prefix := "/api/v1"
 	apiGroup := server.Group(prefix)
@@ -109,10 +122,15 @@ func main() {
 		cancel()
 	}()
 
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8090" // fallback default
+	}
+
 	// Start server in a goroutine
 	go func() {
-		slog.Info("Server running at http://localhost:8080")
-		if err := server.Run(":8080"); err != nil {
+		slog.Info("Server running at http://localhost:" + port)
+		if err := server.Run(":" + port); err != nil {
 			slog.Error("Server failed to start", "error", err)
 			cancel()
 		}
