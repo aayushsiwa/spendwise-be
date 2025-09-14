@@ -6,16 +6,18 @@ import (
 	"aayushsiwa/expense-tracker/models"
 	"aayushsiwa/expense-tracker/utils"
 	"aayushsiwa/expense-tracker/validation"
+	"database/sql"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
 // UpdateSummary updates the summary table and returns an error if it fails
-func UpdateSummary() error {
+func UpdateSummary() (err error) {
 	slog.Info("Updating summary...")
 
 	tx, err := db.DB.Begin()
@@ -23,9 +25,10 @@ func UpdateSummary() error {
 		slog.Error("Failed to begin transaction", "error", err)
 		return errors.NewDatabase("Failed to begin transaction", err)
 	}
+
 	defer func() {
 		if err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 		}
 	}()
 
@@ -37,63 +40,91 @@ func UpdateSummary() error {
 		return errors.NewDatabase("Failed to clear summary_details", err)
 	}
 
-	// Get all months
+	// Get min month from records
+	var minMonth sql.NullString
+	if err = tx.QueryRow(`
+		SELECT MIN(strftime('%Y-%m', date))
+		FROM records
+	`).Scan(&minMonth); err != nil {
+		return errors.NewDatabase("Failed to get min month", err)
+	}
+
+	if !minMonth.Valid {
+		// No records at all → just exit cleanly
+		slog.Info("No records found, summary will be empty")
+		return tx.Commit()
+	}
+
+	// Use current month as maxMonth
+	maxMonth := time.Now().Format("2006-01")
+
+	// Get monthly aggregates from records
 	rows, err := tx.Query(`
-        SELECT
-            strftime('%Y-%m', date) AS month,
-            SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) AS total_income,
-            SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) AS total_expense,
-            SUM(CASE WHEN type = 'transfer' THEN amount ELSE 0 END) AS total_transfer
-        FROM records
-        GROUP BY month
-        ORDER BY month ASC
-    `)
+		SELECT
+			strftime('%Y-%m', date) AS month,
+			SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) AS total_income,
+			SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) AS total_expense,
+			SUM(CASE WHEN type = 'transfer' THEN amount ELSE 0 END) AS total_transfer
+		FROM records
+		GROUP BY month
+		ORDER BY month ASC
+	`)
 	if err != nil {
 		return errors.NewDatabase("Failed to aggregate records", err)
 	}
 	defer rows.Close()
 
-	var openingBalance float64
+	type monthData struct {
+		income   float64
+		expense  float64
+		transfer float64
+	}
+	data := make(map[string]monthData)
+
 	for rows.Next() {
-		var month string
-		var income, expense, transfer float64
-		if err := rows.Scan(&month, &income, &expense, &transfer); err != nil {
+		var m string
+		var inc, exp, trf float64
+		if err = rows.Scan(&m, &inc, &exp, &trf); err != nil {
 			return errors.NewDatabase("Failed to scan summary row", err)
 		}
+		data[m] = monthData{inc, exp, trf}
+	}
+	if err = rows.Err(); err != nil {
+		return errors.NewDatabase("Error iterating summary rows", err)
+	}
 
-		netBalance := income - expense + transfer
-		closingBalance := openingBalance + netBalance
+	// Iterate from minMonth to current month
+	openingBalance := 0.0
+	for m := minMonth.String; m <= maxMonth; m = utils.NextMonth(m) {
+		d := data[m] // zero-value if not present
+		net := d.income - d.expense + d.transfer
+		closing := openingBalance + net
 
 		_, err = tx.Exec(`
-            INSERT INTO summary (month, total_income, total_expense, opening_balance, net_balance, closing_balance)
-            VALUES (?, ?, ?, ?, ?, ?)
-        `, month, income, expense, openingBalance, netBalance, closingBalance)
+			INSERT INTO summary (month, total_income, total_expense, opening_balance, net_balance, closing_balance)
+			VALUES (?, ?, ?, ?, ?, ?)
+		`, m, d.income, d.expense, openingBalance, net, closing)
 		if err != nil {
 			return errors.NewDatabase("Failed to insert summary for month", err)
 		}
 
-		openingBalance = closingBalance
+		openingBalance = closing
 	}
 
 	// Populate summary_details for fast API
 	_, err = tx.Exec(`
-    INSERT INTO summary_details (month, type, category_id, category_name, amount)
-    SELECT
-        strftime('%Y-%m', r.date) AS month,
-        r.type,
-        c.id AS category_id,
-        c.name AS category_name,
-        SUM(r.amount) AS amount
-    FROM records r
-    JOIN categories c ON r.category_id = c.id
-    WHERE r.type IN ('income', 'expense', 'transfer')
-    GROUP BY
-		month,
-        r.type,
-        c.id,
-        c.name
+		INSERT INTO summary_details (month, type, category_id, category_name, amount)
+		SELECT
+			strftime('%Y-%m', r.date) AS month,
+			r.type,
+			c.id AS category_id,
+			c.name AS category_name,
+			SUM(r.amount) AS amount
+		FROM records r
+		JOIN categories c ON r.category_id = c.id
+		WHERE r.type IN ('income', 'expense', 'transfer')
+		GROUP BY month, r.type, c.id, c.name
 	`)
-
 	if err != nil {
 		return errors.NewDatabase("Failed to insert summary details", err)
 	}
