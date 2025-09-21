@@ -1,9 +1,11 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/csv"
 	"io"
 	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -110,6 +112,11 @@ func ImportJSON(c *gin.Context) {
 		return
 	}
 
+	// Update summary before importing
+	if err := UpdateSummary(); err != nil {
+		slog.Warn("Failed to update summary before JSON import", "error", err)
+	}
+
 	importedCount := 0
 
 	for _, rec := range records {
@@ -137,6 +144,23 @@ func ImportJSON(c *gin.Context) {
 			categoryID = int(lastID)
 		}
 
+		// Get summary
+		var currentBalance float64
+		err = db.DB.QueryRow("SELECT closing_balance FROM summary WHERE month = ?", date[:7]).Scan(&currentBalance)
+		if err == sql.ErrNoRows {
+			currentBalance = 0
+		} else if err != nil {
+			continue
+		}
+
+		// Update balance based on record type
+		if rec.Type == "income" {
+			currentBalance += rec.Amount
+		} else if rec.Type == "expense" {
+			currentBalance -= rec.Amount
+		}
+		// For 'transfer', balance remains unchanged
+
 		encDesc, _ := secure.Encrypt(rec.Description)
 		encNote, _ := secure.Encrypt(rec.Note)
 
@@ -145,14 +169,23 @@ func ImportJSON(c *gin.Context) {
 			continue
 		}
 
-		_, err = db.DB.Exec(`INSERT INTO records (id, date, description, category_id, amount, type, note) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			customID, date, encDesc, categoryID, rec.Amount, rec.Type, encNote)
+		_, err = db.DB.Exec(`INSERT INTO records (id, date, description, category_id, amount, type, note, balance) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			customID, date, encDesc, categoryID, rec.Amount, rec.Type, encNote, currentBalance)
 		if err != nil {
 			log.Printf("Failed to insert record: %v", err)
 			continue
 		}
 
+		// Update summary table
+		if err := UpdateSummary(); err != nil {
+			slog.Warn("Failed to update summary after record creation", "record_id", rec.ID, "error", err)
+		}
+
 		importedCount++
+	}
+
+	if err := utils.RecalculateBalances(); err != nil {
+		log.Printf("Failed to recalculate balances: %v", err)
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
