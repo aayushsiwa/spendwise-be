@@ -127,7 +127,7 @@ func GetRecords(c *gin.Context) {
 	offset := (page - 1) * limit
 
 	query := `
-		SELECT r.id, r.date, r.description, c.name as category, r.amount, r.type, r.note
+		SELECT r.id, r.date, r.description, c.name as category, r.amount, r.type, r.note, r.balance
 		FROM records r
 		JOIN categories c ON r.category_id = c.id
 	`
@@ -152,7 +152,7 @@ func GetRecords(c *gin.Context) {
 	var records []models.Record
 	for rows.Next() {
 		var rec models.Record
-		err := rows.Scan(&rec.ID, &rec.Date, &rec.Description, &rec.Category, &rec.Amount, &rec.Type, &rec.Note)
+		err := rows.Scan(&rec.ID, &rec.Date, &rec.Description, &rec.Category, &rec.Amount, &rec.Type, &rec.Note, &rec.Balance)
 		if err != nil {
 			appErr := errors.NewDatabase("Failed to read record data", err)
 			errors.HandleError(c, appErr)
@@ -355,7 +355,7 @@ func CreateRecord(c *gin.Context) {
 
 	// Get category ID
 	var categoryId int
-	err = db.DB.QueryRow("SELECT id FROM categories WHERE name = ?", rec.Category).Scan(&categoryId)
+	err = db.DB.QueryRow("SELECT id FROM categories WHERE name = ?", strings.ToLower(rec.Category)).Scan(&categoryId)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			appErr := errors.NewInvalidInput("Category not found", err).WithDetails(map[string]interface{}{
@@ -369,11 +369,28 @@ func CreateRecord(c *gin.Context) {
 		return
 	}
 
+	// Get summary
+	var currentBalance float64
+	err = db.DB.QueryRow("SELECT closing_balance FROM summary WHERE month = ?", rec.Date[:7]).Scan(&currentBalance)
+	if err == sql.ErrNoRows {
+		currentBalance = 0
+	} else if err != nil {
+		return
+	}
+
+	// Update balance based on record type
+	if rec.Type == "income" {
+		currentBalance += rec.Amount
+	} else if rec.Type == "expense" {
+		currentBalance -= rec.Amount
+	}
+	// For 'transfer', balance remains unchanged
+
 	// Insert record
 	_, err = db.DB.Exec(`
-		INSERT INTO records (id, date, description, category_id, amount, type, note)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		rec.ID, rec.Date, rec.Description, categoryId, rec.Amount, rec.Type, rec.Note)
+		INSERT INTO records (id, date, description, category_id, amount, type, note, balance)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		rec.ID, rec.Date, rec.Description, categoryId, rec.Amount, rec.Type, rec.Note, currentBalance)
 	if err != nil {
 		appErr := errors.NewDatabase("Failed to insert record", err)
 		errors.HandleError(c, appErr)
