@@ -13,7 +13,7 @@ func GenerateCustomID(date string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("invalid date format: %v", err)
 	}
-	idPrefix := parsedDate.Format("020106") // ddmmyy
+	idPrefix := parsedDate.Format("060102") // yymmdd
 
 	var customID string
 	var count int
