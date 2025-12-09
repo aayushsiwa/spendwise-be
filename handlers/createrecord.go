@@ -89,6 +89,8 @@ func (h *Handler) CreateRecord(c *gin.Context) {
 	if err == sql.ErrNoRows {
 		currentBalance = 0
 	} else if err != nil {
+		appErr := errors.NewDatabase("Failed to get summary", err)
+		errors.HandleError(c, appErr)
 		return
 	}
 
