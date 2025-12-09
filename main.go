@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"aayushsiwa/expense-tracker/db"
+	"aayushsiwa/expense-tracker/handlers"
 	"aayushsiwa/expense-tracker/middleware"
 	"aayushsiwa/expense-tracker/routes"
 	"aayushsiwa/expense-tracker/secure"
@@ -29,12 +30,6 @@ func init() {
 		slog.Warn("No .env file found, using system environment variables", "error", err)
 	}
 
-	// Initialize database with error handling
-	if err := db.Init("records.db"); err != nil {
-		slog.Error("Failed to initialize database", "error", err)
-		os.Exit(1)
-	}
-
 	// Set encryption key with validation
 	key := os.Getenv("ENCRYPTION_KEY")
 	if key == "" {
@@ -52,6 +47,13 @@ func init() {
 
 func main() {
 	slog.Info("Starting Expense Tracker Server...")
+
+	// Initialize database with error handling
+	database, err := db.Init("records.db")
+	if err != nil {
+		slog.Error("Failed to initialize database", "error", err)
+		os.Exit(1)
+	}
 
 	// Set Gin mode based on environment
 	if os.Getenv("GIN_MODE") == "" {
@@ -95,18 +97,20 @@ func main() {
 	prefix := "/api/v1"
 	apiGroup := server.Group(prefix)
 
-	apiRoutes := routes.NewRoutes()
+	handler := handlers.NewHandler(database)
+
+	apiRoutes := routes.NewRoutes(handler)
 	routes.AttachRoutes(apiGroup, apiRoutes)
 
 	// Health check endpoint
-	server.GET("/health", func(c *gin.Context) {
-		if err := db.HealthCheck(); err != nil {
-			slog.Error("Health check failed", "error", err)
-			c.JSON(503, gin.H{"status": "unhealthy", "error": err.Error()})
-			return
-		}
-		c.JSON(200, gin.H{"status": "healthy"})
-	})
+	// server.GET("/health", func(c *gin.Context) {
+	// 	if err := db.HealthCheck(); err != nil {
+	// 		slog.Error("Health check failed", "error", err)
+	// 		c.JSON(503, gin.H{"status": "unhealthy", "error": err.Error()})
+	// 		return
+	// 	}
+	// 	c.JSON(200, gin.H{"status": "healthy"})
+	// })
 
 	// Graceful shutdown setup
 	ctx, cancel := context.WithCancel(context.Background())
@@ -141,7 +145,7 @@ func main() {
 
 	// Cleanup
 	slog.Info("Shutting down server...")
-	if err := db.Close(); err != nil {
+	if err := database.Close(); err != nil {
 		slog.Error("Failed to close database", "error", err)
 	}
 	slog.Info("Server shutdown complete")
