@@ -103,14 +103,14 @@ func main() {
 	routes.AttachRoutes(apiGroup, apiRoutes)
 
 	// Health check endpoint
-	// server.GET("/health", func(c *gin.Context) {
-	// 	if err := db.HealthCheck(); err != nil {
-	// 		slog.Error("Health check failed", "error", err)
-	// 		c.JSON(503, gin.H{"status": "unhealthy", "error": err.Error()})
-	// 		return
-	// 	}
-	// 	c.JSON(200, gin.H{"status": "healthy"})
-	// })
+	server.GET("/health", func(c *gin.Context) {
+		if err := db.HealthCheck(); err != nil {
+			slog.Error("Health check failed", "error", err)
+			c.JSON(503, gin.H{"status": "unhealthy", "error": err.Error()})
+			return
+		}
+		c.JSON(200, gin.H{"status": "healthy"})
+	})
 
 	// Graceful shutdown setup
 	ctx, cancel := context.WithCancel(context.Background())
@@ -145,7 +145,7 @@ func main() {
 
 	// Cleanup
 	slog.Info("Shutting down server...")
-	if err := database.Close(); err != nil {
+	if err := db.Close(); err != nil {
 		slog.Error("Failed to close database", "error", err)
 	}
 	slog.Info("Server shutdown complete")
