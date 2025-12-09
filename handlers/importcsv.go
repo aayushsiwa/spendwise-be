@@ -81,8 +81,14 @@ func (h *Handler) ImportCSV(c *gin.Context) {
 			categoryID = int(lastID)
 		}
 
-		encryptedDescription, _ := secure.Encrypt(description)
-		encryptedNote, _ := secure.Encrypt(note)
+		encryptedDescription, err := secure.Encrypt(description)
+		if err != nil {
+			continue
+		}
+		encryptedNote, err := secure.Encrypt(note)
+		if err != nil {
+			continue
+		}
 
 		_, err = h.DB.Exec(`INSERT INTO records (date, description, category_id, amount, type, note) VALUES (?, ?, ?, ?, ?, ?)`,
 			date, encryptedDescription, categoryID, amount, recordType, encryptedNote)

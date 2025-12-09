@@ -70,8 +70,14 @@ func (h *Handler) ImportJSON(c *gin.Context) {
 		}
 		// For 'transfer', balance remains unchanged
 
-		encDesc, _ := secure.Encrypt(rec.Description)
-		encNote, _ := secure.Encrypt(rec.Note)
+		encDesc, err := secure.Encrypt(rec.Description)
+		if err != nil {
+			continue
+		}
+		encNote, err := secure.Encrypt(rec.Note)
+		if err != nil {
+			continue
+		}
 
 		customID, err := h.GenerateCustomID(date)
 		if err != nil {
