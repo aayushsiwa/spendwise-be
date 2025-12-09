@@ -17,108 +17,108 @@ type Route struct {
 
 type Routes []Route
 
-func NewRoutes() Routes {
+func NewRoutes(h *handlers.Handler) Routes {
 	return Routes{
 		// Records
 		{
 			Name:        "GetRecords",
 			Method:      "GET",
 			Pattern:     "/records",
-			HandlerFunc: handlers.GetRecords,
+			HandlerFunc: h.GetRecords,
 		},
 		{
 			Name:        "CreateRecord",
 			Method:      "POST",
 			Pattern:     "/records",
-			HandlerFunc: handlers.CreateRecord,
+			HandlerFunc: h.CreateRecord,
 		},
 		{
 			Name:        "GetRecord",
 			Method:      "GET",
 			Pattern:     "/records/:id",
-			HandlerFunc: handlers.GetRecord,
+			HandlerFunc: h.GetRecord,
 		},
 		{
 			Name:        "PatchRecord",
 			Method:      "PATCH",
 			Pattern:     "/records/:id",
-			HandlerFunc: handlers.PatchRecord,
+			HandlerFunc: h.PatchRecord,
 		}, {
 			Name:        "DeleteRecord",
 			Method:      "DELETE",
 			Pattern:     "/records/:id",
-			HandlerFunc: handlers.DeleteRecord,
+			HandlerFunc: h.DeleteRecord,
 		},
 		// Export
 		{
 			Name:        "ExportCSV",
 			Method:      "GET",
 			Pattern:     "/export/csv",
-			HandlerFunc: handlers.ExportCSV,
+			HandlerFunc: h.ExportCSV,
 		},
 		// Summary
 		{
 			Name:        "GetSummary",
 			Method:      "GET",
 			Pattern:     "/summary",
-			HandlerFunc: handlers.GetSummary,
+			HandlerFunc: h.GetSummary,
 		},
 		{
 			Name:        "GetSummaryForFilters",
 			Method:      "GET",
 			Pattern:     "/summary/filter",
-			HandlerFunc: handlers.GetSummaryForFilters,
+			HandlerFunc: h.GetSummaryForFilters,
 		},
 		{
 			Name:        "GetSummaryForFilters",
 			Method:      "GET",
 			Pattern:     "/summary/:filter/:value",
-			HandlerFunc: handlers.GetSummaryForFilter,
+			HandlerFunc: h.GetSummaryForFilter,
 		},
 		// Import
 		{
 			Name:        "ImportCSV",
 			Method:      "POST",
 			Pattern:     "/import/csv",
-			HandlerFunc: handlers.ImportCSV,
+			HandlerFunc: h.ImportCSV,
 		},
 		{
 			Name:        "ImportJSON",
 			Method:      "POST",
 			Pattern:     "/import/json",
-			HandlerFunc: handlers.ImportJSON,
+			HandlerFunc: h.ImportJSON,
 		},
 		// Categories
 		{
 			Name:        "GetCategories",
 			Method:      "GET",
 			Pattern:     "/categories",
-			HandlerFunc: handlers.GetCategories,
+			HandlerFunc: h.GetCategories,
 		},
 		{
 			Name:        "CreateCategory",
 			Method:      "POST",
 			Pattern:     "/categories",
-			HandlerFunc: handlers.CreateCategories,
+			HandlerFunc: h.CreateCategories,
 		},
 		{
 			Name:        "UpdateCategory",
 			Method:      "PATCH",
 			Pattern:     "/categories/:id",
-			HandlerFunc: handlers.UpdateCategory,
+			HandlerFunc: h.UpdateCategory,
 		},
 		{
 			Name:        "DeleteCategory",
 			Method:      "DELETE",
 			Pattern:     "/categories/:id",
-			HandlerFunc: handlers.DeleteCategory,
+			HandlerFunc: h.DeleteCategory,
 		},
 		// Category Records
 		{
 			Name:        "GetCategoryRecords",
 			Method:      "GET",
 			Pattern:     "/categories/:id",
-			HandlerFunc: handlers.GetCategoryRecords,
+			HandlerFunc: h.GetCategoryRecords,
 		},
 		// Health Check
 		{
