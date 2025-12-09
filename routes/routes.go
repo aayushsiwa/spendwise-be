@@ -70,7 +70,7 @@ func NewRoutes(h *handlers.Handler) Routes {
 			HandlerFunc: h.GetSummaryForFilters,
 		},
 		{
-			Name:        "GetSummaryForFilters",
+			Name:        "GetSummaryForFilter",
 			Method:      "GET",
 			Pattern:     "/summary/:filter/:value",
 			HandlerFunc: h.GetSummaryForFilter,
