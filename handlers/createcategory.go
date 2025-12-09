@@ -54,7 +54,7 @@ func (h *Handler) CreateCategories(c *gin.Context) {
 
 	stmt, err := tx.Prepare("INSERT INTO categories (name, icon, color) VALUES (?, ?, ?)")
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		appErr := errors.NewDatabase("Failed to prepare statement", err)
 		errors.HandleError(c, appErr)
 		return
@@ -69,7 +69,7 @@ func (h *Handler) CreateCategories(c *gin.Context) {
 		lowerName := strings.ToLower(cat.Name)
 		result, err := stmt.Exec(lowerName, cat.Icon, cat.Color)
 		if err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 			appErr := errors.NewDatabase("Failed to insert category", err).WithDetails(map[string]interface{}{
 				"category_name": cat.Name,
 			})

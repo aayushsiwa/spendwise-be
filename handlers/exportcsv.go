@@ -60,7 +60,10 @@ func (h *Handler) ExportCSV(c *gin.Context) {
 		c.Header("Content-Type", "text/plain; charset=utf-8")
 		c.Header("Content-Disposition", "inline; filename=records.txt")
 
-		c.Writer.Write([]byte("Date,Description,Category,Amount,Type,Note\n"))
+		if _, err := c.Writer.Write([]byte("Date,Description,Category,Amount,Type,Note\n")); err != nil {
+			c.String(http.StatusInternalServerError, "Error writing CSV header")
+			return
+		}
 
 		for rows.Next() {
 			var date, desc, cat, typ, note string
@@ -80,7 +83,10 @@ func (h *Handler) ExportCSV(c *gin.Context) {
 			decryptedNote, _ := secure.Decrypt(note)
 
 			line := date + "," + decryptedDesc + "," + categoryName + "," + strconv.FormatFloat(amt, 'f', 2, 64) + "," + typ + "," + decryptedNote + "\n"
-			c.Writer.Write([]byte(line))
+			if _, err := c.Writer.Write([]byte(line)); err != nil {
+				c.String(http.StatusInternalServerError, "Error writing CSV line")
+				return
+			}
 		}
 	}
 }

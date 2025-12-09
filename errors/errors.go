@@ -67,9 +67,8 @@ func (e *AppError) WithDetails(details map[string]interface{}) *AppError {
 }
 
 // WithContext adds context information for logging
-func (e *AppError) WithContext(key string, value interface{}) *AppError {
+func (e *AppError) WithContext(key string, value interface{}) {
 	e.Context[key] = value
-	return e
 }
 
 // Log logs the error with structured logging

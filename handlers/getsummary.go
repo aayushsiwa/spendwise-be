@@ -514,7 +514,7 @@ func (h *Handler) GetSummaryByMonth(c *gin.Context, params GetSummaryByDateParam
 
 	// Get opening balance = closing balance before startDate
 	var openingBalance float64
-	h.DB.QueryRow(`
+	if err = h.DB.QueryRow(`
 		SELECT COALESCE(SUM(
 			CASE WHEN type = 'income' THEN amount
 			     WHEN type = 'transfer' THEN amount
@@ -522,18 +522,25 @@ func (h *Handler) GetSummaryByMonth(c *gin.Context, params GetSummaryByDateParam
 		), 0)
 		FROM records
 		WHERE date < ?
-	`, startDate).Scan(&openingBalance)
+	`, startDate).Scan(&openingBalance); err != nil {
+
+		errors.HandleError(c, errors.NewDatabase("Failed to get opening balance", err))
+		return
+	}
 
 	// Aggregate totals in range
 	var totalIncome, totalExpense, totalTransfer float64
-	h.DB.QueryRow(`
+	if err = h.DB.QueryRow(`
 		SELECT 
 			COALESCE(SUM(CASE WHEN type='income' THEN amount END),0),
 			COALESCE(SUM(CASE WHEN type='expense' THEN amount END),0),
 			COALESCE(SUM(CASE WHEN type='transfer' THEN amount END),0)
 		FROM records
 		WHERE date BETWEEN ? AND ?
-	`, startDate, endDate).Scan(&totalIncome, &totalExpense, &totalTransfer)
+	`, startDate, endDate).Scan(&totalIncome, &totalExpense, &totalTransfer); err != nil {
+		errors.HandleError(c, errors.NewDatabase("Failed to get totals in range", err))
+		return
+	}
 
 	netBalance := totalIncome - totalExpense + totalTransfer
 	closingBalance := openingBalance + netBalance
