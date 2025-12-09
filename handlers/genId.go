@@ -1,14 +1,12 @@
-package utils
+package handlers
 
 import (
 	"database/sql"
 	"fmt"
 	"time"
-
-	"aayushsiwa/expense-tracker/db"
 )
 
-func GenerateCustomID(date string) (string, error) {
+func (h *Handler) GenerateCustomID(date string) (string, error) {
 	parsedDate, err := time.Parse("2006-01-02", date)
 	if err != nil {
 		return "", fmt.Errorf("invalid date format: %v", err)
@@ -19,7 +17,7 @@ func GenerateCustomID(date string) (string, error) {
 	var count int
 
 	// Start with the number of records on that date
-	err = db.DB.QueryRow("SELECT COUNT(*) FROM records WHERE date = ?", date).Scan(&count)
+	err = h.DB.QueryRow("SELECT COUNT(*) FROM records WHERE date = ?", date).Scan(&count)
 	if err != nil {
 		return "", err
 	}
@@ -28,7 +26,7 @@ func GenerateCustomID(date string) (string, error) {
 		customID = fmt.Sprintf("%s%d", idPrefix, count)
 
 		var exists string
-		err := db.DB.QueryRow("SELECT id FROM records WHERE id = ?", customID).Scan(&exists)
+		err := h.DB.QueryRow("SELECT id FROM records WHERE id = ?", customID).Scan(&exists)
 		if err == sql.ErrNoRows {
 			// ID is unique
 			break

@@ -5,16 +5,15 @@ import (
 	"net/http"
 	"strconv"
 
-	"aayushsiwa/expense-tracker/db"
 	"aayushsiwa/expense-tracker/secure"
 
 	"github.com/gin-gonic/gin"
 )
 
-func ExportCSV(c *gin.Context) {
+func (h *Handler) ExportCSV(c *gin.Context) {
 	download := c.Query("download") == "true"
 
-	rows, err := db.DB.Query("SELECT date, description, category_id, amount, type, note FROM records ORDER BY date DESC")
+	rows, err := h.DB.Query("SELECT date, description, category_id, amount, type, note FROM records ORDER BY date DESC")
 	if err != nil {
 		c.String(http.StatusInternalServerError, "Error querying records")
 		return
@@ -36,7 +35,7 @@ func ExportCSV(c *gin.Context) {
 			}
 
 			var categoryName string
-			err := db.DB.QueryRow("SELECT name FROM categories WHERE id = ?", cat).Scan(&categoryName)
+			err := h.DB.QueryRow("SELECT name FROM categories WHERE id = ?", cat).Scan(&categoryName)
 			if err != nil {
 				c.String(http.StatusInternalServerError, "Error querying categories")
 				return
@@ -71,7 +70,7 @@ func ExportCSV(c *gin.Context) {
 				continue
 			}
 			var categoryName string
-			err := db.DB.QueryRow("SELECT name FROM categories WHERE id = ?", cat).Scan(&categoryName)
+			err := h.DB.QueryRow("SELECT name FROM categories WHERE id = ?", cat).Scan(&categoryName)
 			if err != nil {
 				c.String(http.StatusInternalServerError, "Error querying categories")
 				return

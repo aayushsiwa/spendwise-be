@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"aayushsiwa/expense-tracker/db"
 	"aayushsiwa/expense-tracker/errors"
 	"aayushsiwa/expense-tracker/models"
 	"aayushsiwa/expense-tracker/utils"
@@ -23,10 +22,10 @@ type GetSummaryByDateParams struct {
 }
 
 // UpdateSummary updates the summary table and returns an error if it fails
-func UpdateSummary() (err error) {
+func (h *Handler) UpdateSummary() (err error) {
 	slog.Info("Updating summary...")
 
-	tx, err := db.DB.Begin()
+	tx, err := h.DB.Begin()
 	if err != nil {
 		slog.Error("Failed to begin transaction", "error", err)
 		return errors.NewDatabase("Failed to begin transaction", err)
@@ -143,7 +142,7 @@ func UpdateSummary() (err error) {
 	return nil
 }
 
-func GetSummary(c *gin.Context) {
+func (h *Handler) GetSummary(c *gin.Context) {
 	startDate := c.Query("start_date")
 	endDate := c.Query("end_date")
 	month := c.Query("month")
@@ -151,11 +150,11 @@ func GetSummary(c *gin.Context) {
 	switch {
 	case month != "":
 		// Call by month
-		GetSummaryByMonth(c, GetSummaryByDateParams{Month: &month})
+		h.GetSummaryByMonth(c, GetSummaryByDateParams{Month: &month})
 		return
 	case startDate != "" && endDate != "":
 		// Call by date range
-		GetSummaryByMonth(c, GetSummaryByDateParams{StartDate: &startDate, EndDate: &endDate})
+		h.GetSummaryByMonth(c, GetSummaryByDateParams{StartDate: &startDate, EndDate: &endDate})
 		return
 	default:
 		// No valid parameters provided
@@ -164,13 +163,13 @@ func GetSummary(c *gin.Context) {
 		})
 	}
 
-	if err := UpdateSummary(); err != nil {
+	if err := h.UpdateSummary(); err != nil {
 		errors.HandleError(c, err)
 		return
 	}
 
 	// Step 1: Fetch monthly totals
-	rows, err := db.DB.Query(`
+	rows, err := h.DB.Query(`
         SELECT month, total_income, total_expense, opening_balance, net_balance, closing_balance 
         FROM summary ORDER BY month DESC
     `)
@@ -201,7 +200,7 @@ func GetSummary(c *gin.Context) {
 	}
 
 	// Step 2: Fetch details
-	detailRows, err := db.DB.Query(`
+	detailRows, err := h.DB.Query(`
     SELECT 
         month, 
         type, 
@@ -245,7 +244,7 @@ func GetSummary(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"summary": summaries})
 }
 
-func GetSummaryForFilters(c *gin.Context) {
+func (h *Handler) GetSummaryForFilters(c *gin.Context) {
 	// query params
 	startDate := c.Query("start_date")
 	endDate := c.Query("end_date")
@@ -258,7 +257,7 @@ func GetSummaryForFilters(c *gin.Context) {
 	var validationErrs errors.ValidationErrors
 
 	// Ensure the summary table is updated before fetching
-	if err := UpdateSummary(); err != nil {
+	if err := h.UpdateSummary(); err != nil {
 		errors.HandleError(c, err)
 		return
 	}
@@ -333,7 +332,7 @@ func GetSummaryForFilters(c *gin.Context) {
 
 	slog.Debug("Executing query", "query", query, "args", args)
 
-	rows, err := db.DB.Query(query, args...)
+	rows, err := h.DB.Query(query, args...)
 	if err != nil {
 		appErr := errors.NewDatabase("Failed to retrieve records", err)
 		errors.HandleError(c, appErr)
@@ -372,8 +371,8 @@ func GetSummaryForFilters(c *gin.Context) {
 	c.JSON(http.StatusOK, summaries)
 }
 
-func GetSummaryForFilter(c *gin.Context) {
-	if err := UpdateSummary(); err != nil {
+func (h *Handler) GetSummaryForFilter(c *gin.Context) {
+	if err := h.UpdateSummary(); err != nil {
 		errors.HandleError(c, err)
 		return
 	}
@@ -389,11 +388,11 @@ func GetSummaryForFilter(c *gin.Context) {
 
 	switch filterType {
 	case "month":
-		GetSummaryByMonth(c, GetSummaryByDateParams{Month: &value})
+		h.GetSummaryByMonth(c, GetSummaryByDateParams{Month: &value})
 	case "category":
-		GetSummaryByCategory(c, value)
+		h.GetSummaryByCategory(c, value)
 	case "type":
-		GetSummaryByType(c, value)
+		h.GetSummaryByType(c, value)
 	default:
 		appErr := errors.NewInvalidInput("Invalid filter type", nil).WithDetails(map[string]interface{}{
 			"filter_type":   filterType,
@@ -403,7 +402,7 @@ func GetSummaryForFilter(c *gin.Context) {
 	}
 }
 
-func GetSummaryByMonth(c *gin.Context, params GetSummaryByDateParams) {
+func (h *Handler) GetSummaryByMonth(c *gin.Context, params GetSummaryByDateParams) {
 	var month string
 	if params.Month != nil {
 		month = *params.Month
@@ -418,7 +417,7 @@ func GetSummaryByMonth(c *gin.Context, params GetSummaryByDateParams) {
 	var validationErrs errors.ValidationErrors
 
 	// Always ensure summary table is up-to-date
-	if err := UpdateSummary(); err != nil {
+	if err := h.UpdateSummary(); err != nil {
 		errors.HandleError(c, err)
 		return
 	}
@@ -431,7 +430,7 @@ func GetSummaryByMonth(c *gin.Context, params GetSummaryByDateParams) {
 			return
 		}
 
-		row := db.DB.QueryRow(`
+		row := h.DB.QueryRow(`
 			SELECT total_income, total_expense, opening_balance, net_balance, closing_balance
 			FROM summary
 			WHERE month = ?
@@ -445,7 +444,7 @@ func GetSummaryByMonth(c *gin.Context, params GetSummaryByDateParams) {
 		}
 
 		// Fetch category-level details
-		rows, err := db.DB.Query(`
+		rows, err := h.DB.Query(`
 			SELECT type, category_id, category_name, SUM(amount) AS amount
 			FROM summary_details
 			WHERE month = ?
@@ -515,7 +514,7 @@ func GetSummaryByMonth(c *gin.Context, params GetSummaryByDateParams) {
 
 	// Get opening balance = closing balance before startDate
 	var openingBalance float64
-	db.DB.QueryRow(`
+	h.DB.QueryRow(`
 		SELECT COALESCE(SUM(
 			CASE WHEN type = 'income' THEN amount
 			     WHEN type = 'transfer' THEN amount
@@ -527,7 +526,7 @@ func GetSummaryByMonth(c *gin.Context, params GetSummaryByDateParams) {
 
 	// Aggregate totals in range
 	var totalIncome, totalExpense, totalTransfer float64
-	db.DB.QueryRow(`
+	h.DB.QueryRow(`
 		SELECT 
 			COALESCE(SUM(CASE WHEN type='income' THEN amount END),0),
 			COALESCE(SUM(CASE WHEN type='expense' THEN amount END),0),
@@ -540,7 +539,7 @@ func GetSummaryByMonth(c *gin.Context, params GetSummaryByDateParams) {
 	closingBalance := openingBalance + netBalance
 
 	// Category details
-	rows, err := db.DB.Query(`
+	rows, err := h.DB.Query(`
 		SELECT type, category_id, c.name, SUM(amount)
 		FROM records r
 		JOIN categories c ON r.category_id = c.id
@@ -587,8 +586,8 @@ func GetSummaryByMonth(c *gin.Context, params GetSummaryByDateParams) {
 	})
 }
 
-func GetSummaryByCategory(c *gin.Context, category string) {
-	row := db.DB.QueryRow(`
+func (h *Handler) GetSummaryByCategory(c *gin.Context, category string) {
+	row := h.DB.QueryRow(`
 		SELECT 
 			SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) AS income,
 			SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) AS expense
@@ -625,7 +624,7 @@ func GetSummaryByCategory(c *gin.Context, category string) {
 	})
 }
 
-func GetSummaryByType(c *gin.Context, recordType string) {
+func (h *Handler) GetSummaryByType(c *gin.Context, recordType string) {
 	if recordType != "income" && recordType != "expense" && recordType != "transfer" {
 		appErr := errors.NewInvalidInput("Invalid record type", nil).WithDetails(map[string]interface{}{
 			"type":          recordType,
@@ -637,7 +636,7 @@ func GetSummaryByType(c *gin.Context, recordType string) {
 
 	var total float64
 
-	err := db.DB.QueryRow(`
+	err := h.DB.QueryRow(`
 		SELECT SUM(amount) FROM records WHERE type = ?
 	`, recordType).Scan(&total)
 
