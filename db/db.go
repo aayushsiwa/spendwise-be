@@ -10,42 +10,44 @@ import (
 var DB *sql.DB
 
 // Init initializes the database connection with proper error handling
-func Init(path string) error {
+func Init(path string) (*sql.DB, error) {
 	var err error
-	DB, err = sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		slog.Error("Failed to open database", "path", path, "error", err)
-		return err
+		return nil, err
 	}
 
-	if err = DB.Ping(); err != nil {
+	if err = db.Ping(); err != nil {
 		slog.Error("Database connection failed", "path", path, "error", err)
-		return err
+		return nil, err
 	}
 
 	// Enable foreign key constraints
-	_, err = DB.Exec(`PRAGMA foreign_keys = ON;`)
+	_, err = db.Exec(`PRAGMA foreign_keys = ON;`)
 	if err != nil {
 		slog.Error("Failed to enable foreign keys", "error", err)
-		return err
+		return nil, err
 	}
 
 	// Set WAL mode for better concurrency
-	_, err = DB.Exec(`PRAGMA journal_mode = WAL;`)
+	_, err = db.Exec(`PRAGMA journal_mode = WAL;`)
 	if err != nil {
 		slog.Error("Failed to set WAL mode", "error", err)
-		return err
+		return nil, err
 	}
 
 	// Set synchronous mode for better performance vs safety trade-off
-	_, err = DB.Exec(`PRAGMA synchronous = NORMAL;`)
+	_, err = db.Exec(`PRAGMA synchronous = NORMAL;`)
 	if err != nil {
 		slog.Error("Failed to set synchronous mode", "error", err)
-		return err
+		return nil, err
 	}
 
+	DB = db
+
 	slog.Info("Database connected successfully", "path", path)
-	return nil
+	return db, nil
 }
 
 // Close closes the database connection

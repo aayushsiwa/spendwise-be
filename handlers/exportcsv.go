@@ -5,16 +5,15 @@ import (
 	"net/http"
 	"strconv"
 
-	"aayushsiwa/expense-tracker/db"
 	"aayushsiwa/expense-tracker/secure"
 
 	"github.com/gin-gonic/gin"
 )
 
-func ExportCSV(c *gin.Context) {
+func (h *Handler) ExportCSV(c *gin.Context) {
 	download := c.Query("download") == "true"
 
-	rows, err := db.DB.Query("SELECT date, description, category_id, amount, type, note FROM records ORDER BY date DESC")
+	rows, err := h.DB.Query("SELECT date, description, category_id, amount, type, note FROM records ORDER BY date DESC")
 	if err != nil {
 		c.String(http.StatusInternalServerError, "Error querying records")
 		return
@@ -36,7 +35,7 @@ func ExportCSV(c *gin.Context) {
 			}
 
 			var categoryName string
-			err := db.DB.QueryRow("SELECT name FROM categories WHERE id = ?", cat).Scan(&categoryName)
+			err := h.DB.QueryRow("SELECT name FROM categories WHERE id = ?", cat).Scan(&categoryName)
 			if err != nil {
 				c.String(http.StatusInternalServerError, "Error querying categories")
 				return
@@ -61,7 +60,10 @@ func ExportCSV(c *gin.Context) {
 		c.Header("Content-Type", "text/plain; charset=utf-8")
 		c.Header("Content-Disposition", "inline; filename=records.txt")
 
-		c.Writer.Write([]byte("Date,Description,Category,Amount,Type,Note\n"))
+		if _, err := c.Writer.Write([]byte("Date,Description,Category,Amount,Type,Note\n")); err != nil {
+			c.String(http.StatusInternalServerError, "Error writing CSV header")
+			return
+		}
 
 		for rows.Next() {
 			var date, desc, cat, typ, note string
@@ -71,7 +73,7 @@ func ExportCSV(c *gin.Context) {
 				continue
 			}
 			var categoryName string
-			err := db.DB.QueryRow("SELECT name FROM categories WHERE id = ?", cat).Scan(&categoryName)
+			err := h.DB.QueryRow("SELECT name FROM categories WHERE id = ?", cat).Scan(&categoryName)
 			if err != nil {
 				c.String(http.StatusInternalServerError, "Error querying categories")
 				return
@@ -81,7 +83,10 @@ func ExportCSV(c *gin.Context) {
 			decryptedNote, _ := secure.Decrypt(note)
 
 			line := date + "," + decryptedDesc + "," + categoryName + "," + strconv.FormatFloat(amt, 'f', 2, 64) + "," + typ + "," + decryptedNote + "\n"
-			c.Writer.Write([]byte(line))
+			if _, err := c.Writer.Write([]byte(line)); err != nil {
+				c.String(http.StatusInternalServerError, "Error writing CSV line")
+				return
+			}
 		}
 	}
 }

@@ -1,7 +1,6 @@
-package utils
+package handlers
 
 import (
-	"aayushsiwa/expense-tracker/db"
 	"aayushsiwa/expense-tracker/models"
 	"database/sql"
 	"fmt"
@@ -9,9 +8,9 @@ import (
 	"time"
 )
 
-func RecalculateBalances() error {
+func (h *Handler) RecalculateBalances() error {
 	// Step 1: Fetch all records ordered by date
-	rows, err := db.DB.Query(`
+	rows, err := h.DB.Query(`
 		SELECT id, date, amount, type 
 		FROM records 
 		ORDER BY date ASC
@@ -57,7 +56,7 @@ func RecalculateBalances() error {
 
 			// Try to get previous month closing_balance
 			var prevClosing float64
-			err := db.DB.QueryRow(`
+			err := h.DB.QueryRow(`
 				SELECT closing_balance 
 				FROM summary 
 				WHERE month = ?
@@ -82,7 +81,7 @@ func RecalculateBalances() error {
 		}
 
 		// Update the record's balance in DB
-		_, err = db.DB.Exec(`
+		_, err = h.DB.Exec(`
 			UPDATE records SET balance = ? WHERE id = ?
 		`, runningBalance, rec.ID)
 		if err != nil {
