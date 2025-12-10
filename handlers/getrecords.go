@@ -3,7 +3,6 @@ package handlers
 import (
 	"aayushsiwa/expense-tracker/errors"
 	"aayushsiwa/expense-tracker/models"
-	"aayushsiwa/expense-tracker/secure"
 	"aayushsiwa/expense-tracker/utils"
 	"aayushsiwa/expense-tracker/validation"
 	"log/slog"
@@ -153,27 +152,6 @@ func (h *Handler) GetRecords(c *gin.Context) {
 			appErr := errors.NewDatabase("Failed to read record data", err)
 			errors.HandleError(c, appErr)
 			return
-		}
-
-		// Decrypt sensitive fields with proper error handling
-		if rec.Description != "" {
-			decrypted, err := secure.Decrypt(rec.Description)
-			if err != nil {
-				slog.Warn("Failed to decrypt description", "record_id", rec.ID, "error", err)
-				rec.Description = "[Encryption Error]"
-			} else {
-				rec.Description = decrypted
-			}
-		}
-
-		if rec.Note != "" {
-			decrypted, err := secure.Decrypt(rec.Note)
-			if err != nil {
-				slog.Warn("Failed to decrypt Note", "record_id", rec.ID, "error", err)
-				rec.Note = "[Encryption Error]"
-			} else {
-				rec.Note = decrypted
-			}
 		}
 
 		// Filter by description substring after decryption
