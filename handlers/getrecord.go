@@ -3,7 +3,6 @@ package handlers
 import (
 	"aayushsiwa/expense-tracker/errors"
 	"aayushsiwa/expense-tracker/models"
-	"aayushsiwa/expense-tracker/secure"
 	"aayushsiwa/expense-tracker/validation"
 	"database/sql"
 	"fmt"
@@ -41,27 +40,6 @@ func (h *Handler) GetRecord(c *gin.Context) {
 			errors.HandleError(c, appErr)
 		}
 		return
-	}
-
-	// Decrypt sensitive fields with proper error handling
-	if rec.Description != "" {
-		decrypted, err := secure.Decrypt(rec.Description)
-		if err != nil {
-			slog.Warn("Failed to decrypt description", "record_id", rec.ID, "error", err)
-			rec.Description = "[Encryption Error]"
-		} else {
-			rec.Description = decrypted
-		}
-	}
-
-	if rec.Note != "" {
-		decrypted, err := secure.Decrypt(rec.Note)
-		if err != nil {
-			slog.Warn("Failed to decrypt Note", "record_id", rec.ID, "error", err)
-			rec.Note = "[Encryption Error]"
-		} else {
-			rec.Note = decrypted
-		}
 	}
 
 	slog.Info("Record retrieved successfully", "record_id", rec.ID)

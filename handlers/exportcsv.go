@@ -5,8 +5,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"aayushsiwa/expense-tracker/secure"
-
 	"github.com/gin-gonic/gin"
 )
 
@@ -41,16 +39,13 @@ func (h *Handler) ExportCSV(c *gin.Context) {
 				return
 			}
 
-			decryptedDesc, _ := secure.Decrypt(desc)
-			decryptedNote, _ := secure.Decrypt(note)
-
 			record := []string{
 				date,
-				decryptedDesc,
+				desc,
 				categoryName,
 				strconv.FormatFloat(amt, 'f', 2, 64),
 				typ,
-				decryptedNote,
+				note,
 			}
 			_ = writer.Write(record)
 		}
@@ -79,10 +74,7 @@ func (h *Handler) ExportCSV(c *gin.Context) {
 				return
 			}
 
-			decryptedDesc, _ := secure.Decrypt(desc)
-			decryptedNote, _ := secure.Decrypt(note)
-
-			line := date + "," + decryptedDesc + "," + categoryName + "," + strconv.FormatFloat(amt, 'f', 2, 64) + "," + typ + "," + decryptedNote + "\n"
+			line := date + "," + desc + "," + categoryName + "," + strconv.FormatFloat(amt, 'f', 2, 64) + "," + typ + "," + note + "\n"
 			if _, err := c.Writer.Write([]byte(line)); err != nil {
 				c.String(http.StatusInternalServerError, "Error writing CSV line")
 				return
