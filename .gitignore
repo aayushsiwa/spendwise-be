@@ -2,3 +2,4 @@ records.db*
 .env
 main
 tmp
+.idea

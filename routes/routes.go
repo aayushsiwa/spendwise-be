@@ -1,8 +1,7 @@
 package routes
 
 import (
-	"net/http"
-
+	"aayushsiwa/expense-tracker/db"
 	"aayushsiwa/expense-tracker/handlers"
 
 	"github.com/gin-gonic/gin"
@@ -113,20 +112,17 @@ func NewRoutes(h *handlers.Handler) Routes {
 			Pattern:     "/categories/:id",
 			HandlerFunc: h.DeleteCategory,
 		},
-		// Category Records
-		{
-			Name:        "GetCategoryRecords",
-			Method:      "GET",
-			Pattern:     "/categories/:id",
-			HandlerFunc: h.GetCategoryRecords,
-		},
 		// Health Check
 		{
 			Name:    "HealthCheck",
 			Method:  "GET",
 			Pattern: "/health",
 			HandlerFunc: func(c *gin.Context) {
-				c.JSON(http.StatusOK, gin.H{"status": "ok"})
+				if err := db.HealthCheck(); err != nil {
+					c.JSON(503, gin.H{"status": "unhealthy", "error": err.Error()})
+					return
+				}
+				c.JSON(200, gin.H{"status": "healthy"})
 			},
 		},
 	}

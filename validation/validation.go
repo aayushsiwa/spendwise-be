@@ -29,7 +29,7 @@ func (v *Validator) ValidateRecord(record *models.Record) errors.ValidationError
 	// Validate required fields
 	v.required("date", record.Date, "Date is required")
 	v.required("category", record.Category, "Category is required")
-	v.required("type", record.Type, "Type is required")
+	// v.required("type", record.Type, "Type is required")
 
 	// Validate date format
 	if record.Date != "" {
@@ -40,9 +40,9 @@ func (v *Validator) ValidateRecord(record *models.Record) errors.ValidationError
 	v.positiveNumber("amount", record.Amount, "Amount must be a positive number")
 
 	// Validate type
-	if record.Type != "" {
-		v.enum("type", record.Type, []string{"income", "expense", "transfer"}, "Type must be income, expense, or transfer")
-	}
+	// if record.Type != "" {
+	// 	v.enum("type", record.Type, []string{"income", "expense", "transfer"}, "Type must be income, expense, or transfer")
+	// }
 
 	// Validate description length
 	if record.Description != "" {
