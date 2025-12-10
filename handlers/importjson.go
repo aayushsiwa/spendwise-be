@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"aayushsiwa/expense-tracker/models"
-	"aayushsiwa/expense-tracker/secure"
 	"aayushsiwa/expense-tracker/utils"
 
 	"github.com/gin-gonic/gin"
@@ -70,22 +69,13 @@ func (h *Handler) ImportJSON(c *gin.Context) {
 		}
 		// For 'transfer', balance remains unchanged
 
-		encDesc, err := secure.Encrypt(rec.Description)
-		if err != nil {
-			continue
-		}
-		encNote, err := secure.Encrypt(rec.Note)
-		if err != nil {
-			continue
-		}
-
 		customID, err := h.GenerateCustomID(date)
 		if err != nil {
 			continue
 		}
 
 		_, err = h.DB.Exec(`INSERT INTO records (id, date, description, category_id, amount, type, note, balance) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-			customID, date, encDesc, categoryID, rec.Amount, rec.Type, encNote, currentBalance)
+			customID, date, rec.Description, categoryID, rec.Amount, rec.Type, rec.Note, currentBalance)
 		if err != nil {
 			log.Printf("Failed to insert record: %v", err)
 			continue
