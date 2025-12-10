@@ -3,7 +3,6 @@ package handlers
 import (
 	"aayushsiwa/expense-tracker/errors"
 	"aayushsiwa/expense-tracker/models"
-	"aayushsiwa/expense-tracker/secure"
 	"aayushsiwa/expense-tracker/validation"
 	"database/sql"
 	"fmt"
@@ -29,27 +28,6 @@ func (h *Handler) CreateRecord(c *gin.Context) {
 	if len(validationErrs) > 0 {
 		errors.HandleValidationErrors(c, validationErrs)
 		return
-	}
-
-	// Encrypt sensitive fields with proper error handling
-	if rec.Description != "" {
-		encrypted, err := secure.Encrypt(rec.Description)
-		if err != nil {
-			appErr := errors.NewEncryption("Failed to encrypt description", err)
-			errors.HandleError(c, appErr)
-			return
-		}
-		rec.Description = encrypted
-	}
-
-	if rec.Note != "" {
-		encrypted, err := secure.Encrypt(rec.Note)
-		if err != nil {
-			appErr := errors.NewEncryption("Failed to encrypt note", err)
-			errors.HandleError(c, appErr)
-			return
-		}
-		rec.Note = encrypted
 	}
 
 	// Generate custom ID
