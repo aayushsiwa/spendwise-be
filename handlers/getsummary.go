@@ -158,7 +158,7 @@ func (h *Handler) GetSummary(c *gin.Context) {
 		summary := getSummaryInDateRange(h, c, queryParams.From, queryParams.To)
 
 		c.JSON(http.StatusOK, gin.H{"summary": &summary})
-
+		return
 	}
 
 	fromMonth, toMonth := monthRangeFromQuery(queryParams)
