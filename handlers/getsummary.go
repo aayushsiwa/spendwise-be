@@ -4,16 +4,22 @@ import (
 	"aayushsiwa/expense-tracker/errors"
 	"aayushsiwa/expense-tracker/models"
 	"aayushsiwa/expense-tracker/utils"
+	"aayushsiwa/expense-tracker/validation"
 	"database/sql"
 	"fmt"
 	"log/slog"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 )
+
+type GetSummaryByDateParams struct {
+	Month     *string `form:"month"`
+	StartDate *string `form:"start_date"`
+	EndDate   *string `form:"end_date"`
+}
 
 // UpdateSummary updates the summary table and returns an error if it fails
 func (h *Handler) UpdateSummary() (err error) {
@@ -62,7 +68,8 @@ func (h *Handler) UpdateSummary() (err error) {
 		SELECT
 			strftime('%Y-%m', date) AS month,
 			SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) AS total_income,
-			SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) AS total_expense
+			SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) AS total_expense,
+			SUM(CASE WHEN type = 'transfer' THEN amount ELSE 0 END) AS total_transfer
 		FROM records
 		GROUP BY month
 		ORDER BY month ASC
@@ -73,18 +80,19 @@ func (h *Handler) UpdateSummary() (err error) {
 	defer rows.Close()
 
 	type monthData struct {
-		income  float64
-		expense float64
+		income   float64
+		expense  float64
+		transfer float64
 	}
 	data := make(map[string]monthData)
 
 	for rows.Next() {
 		var m string
-		var inc, exp float64
-		if err = rows.Scan(&m, &inc, &exp); err != nil {
+		var inc, exp, trf float64
+		if err = rows.Scan(&m, &inc, &exp, &trf); err != nil {
 			return errors.NewDatabase("Failed to scan summary row", err)
 		}
-		data[m] = monthData{inc, exp}
+		data[m] = monthData{inc, exp, trf}
 	}
 	if err = rows.Err(); err != nil {
 		return errors.NewDatabase("Error iterating summary rows", err)
@@ -94,7 +102,7 @@ func (h *Handler) UpdateSummary() (err error) {
 	openingBalance := 0.0
 	for m := minMonth.String; m <= maxMonth; m = utils.NextMonth(m) {
 		d := data[m] // zero-value if not present
-		net := d.income - d.expense
+		net := d.income - d.expense + d.transfer
 		closing := openingBalance + net
 
 		_, err = tx.Exec(`
@@ -110,9 +118,8 @@ func (h *Handler) UpdateSummary() (err error) {
 
 	// Populate summary_details for fast API
 	_, err = tx.Exec(`
-		INSERT INTO summary_details ("ID", month, type, category_id, category_name, amount)
+		INSERT INTO summary_details (month, type, category_id, category_name, amount)
 		SELECT
-			r.id,
 			strftime('%Y-%m', r.date) AS month,
 			r.type,
 			c.id AS category_id,
@@ -135,18 +142,25 @@ func (h *Handler) UpdateSummary() (err error) {
 	return nil
 }
 
-// GetSummary handles GET /summary requests with filtering and pagination.
 func (h *Handler) GetSummary(c *gin.Context) {
-	queryParams := &models.QueryParams{
-		PaginationFilterParams: models.PaginationFilterParams{
-			Page:  1,
-			Limit: 10,
-		},
-	}
-	if err := c.ShouldBindQuery(queryParams); err != nil {
-		appErr := errors.NewInvalidInput("Invalid query parameters", err)
-		errors.HandleError(c, appErr)
+	startDate := c.Query("start_date")
+	endDate := c.Query("end_date")
+	month := c.Query("month")
+
+	switch {
+	case month != "":
+		// Call by month
+		h.GetSummaryByMonth(c, GetSummaryByDateParams{Month: &month})
 		return
+	case startDate != "" && endDate != "":
+		// Call by date range
+		h.GetSummaryByMonth(c, GetSummaryByDateParams{StartDate: &startDate, EndDate: &endDate})
+		return
+	default:
+		// No valid parameters provided
+		errors.HandleValidationErrors(c, errors.ValidationErrors{
+			errors.NewValidationError("input", "Provide either month or start_date and end_date", nil),
+		})
 	}
 
 	if err := h.UpdateSummary(); err != nil {
@@ -154,376 +168,510 @@ func (h *Handler) GetSummary(c *gin.Context) {
 		return
 	}
 
-	if queryParams.From != "" || queryParams.To != "" {
-		summary := getSummaryInDateRange(h, c, queryParams.From, queryParams.To)
-
-		c.JSON(http.StatusOK, gin.H{"summary": &summary})
-
-	}
-
-	fromMonth, toMonth := monthRangeFromQuery(queryParams)
-
-	offset := (queryParams.Page - 1) * queryParams.Limit
-
-	monthQuery := `
-		SELECT month, total_income, total_expense, opening_balance, net_balance, closing_balance
-		FROM summary
-		WHERE month >= ? AND month <= ?
-		ORDER BY month DESC
-		LIMIT ? OFFSET ?
-	`
-
-	rows, err := h.DB.Query(monthQuery, fromMonth, toMonth, queryParams.Limit, offset)
+	// Step 1: Fetch monthly totals
+	rows, err := h.DB.Query(`
+        SELECT month, total_income, total_expense, opening_balance, net_balance, closing_balance 
+        FROM summary ORDER BY month DESC
+    `)
 	if err != nil {
 		errors.HandleError(c, errors.NewDatabase("Failed to fetch summary", err))
 		return
 	}
 	defer rows.Close()
 
-	type monthRow struct {
-		Month string
-		models.Summary
-	}
-	months := []monthRow{}
-	monthsList := []string{}
+	summaries := make(map[string]models.MonthlySummary)
+
 	for rows.Next() {
-		var mr monthRow
-		if err := rows.Scan(&mr.Month, &mr.TotalIncome, &mr.TotalExpense, &mr.Opening, &mr.Net, &mr.Closing); err != nil {
-			errors.HandleError(c, errors.NewDatabase("Failed to scan summary row", err))
+		var month string
+		var income, expense, opening, net, closing float64
+		if err := rows.Scan(&month, &income, &expense, &opening, &net, &closing); err != nil {
+			errors.HandleError(c, errors.NewDatabase("Failed to parse summary row", err))
 			return
 		}
-		months = append(months, mr)
-		monthsList = append(monthsList, mr.Month)
-	}
-	if err := rows.Err(); err != nil {
-		errors.HandleError(c, errors.NewDatabase("Error iterating summary rows", err))
-		return
-	}
-
-	summaries := make(map[string]models.Summary)
-	for _, m := range months {
-		summaries[m.Month] = models.Summary{
+		summaries[month] = models.MonthlySummary{
 			Expenses:     []models.CategoryDetail{},
 			Incomes:      []models.CategoryDetail{},
-			Net:          m.Net,
-			Opening:      m.Opening,
-			Closing:      m.Closing,
-			TotalExpense: m.TotalExpense,
-			TotalIncome:  m.TotalIncome,
+			Net:          net,
+			Opening:      opening,
+			Closing:      closing,
+			TotalExpense: expense,
+			TotalIncome:  income,
 		}
 	}
 
-	if len(monthsList) == 0 {
-		c.JSON(http.StatusOK, gin.H{"summary": summaries})
-		return
-	}
-
-	detailBase := strings.Builder{}
-	args := []any{}
-
-	whereClause, whereArgs := buildSummaryWhereClause(queryParams)
-	detailBase.WriteString("month IN (")
-	for i, m := range monthsList {
-		if i > 0 {
-			detailBase.WriteString(",")
-		}
-		detailBase.WriteString("?")
-		args = append(args, m)
-	}
-	detailBase.WriteString(")")
-
-	if strings.TrimSpace(whereClause) != "" {
-		detailBase.WriteString(" AND (")
-		detailBase.WriteString(whereClause)
-		detailBase.WriteString(")")
-		for _, a := range whereArgs {
-			args = append(args, a)
-		}
-	}
-
-	detailQuery := fmt.Sprintf(`
-		SELECT "ID", month, type, category_id, category_name, SUM(amount) as total_amount
-		FROM summary_details
-		WHERE %s
-		GROUP BY month, type, category_id, category_name
-	`, detailBase.String())
-
-	dRows, err := h.DB.Query(detailQuery, args...)
+	// Step 2: Fetch details
+	detailRows, err := h.DB.Query(`
+    SELECT 
+        month, 
+        type, 
+        category_id, 
+        category_name, 
+        SUM(amount) as total_amount
+    FROM summary_details
+    GROUP BY month, type, category_id, category_name
+	`)
 	if err != nil {
 		errors.HandleError(c, errors.NewDatabase("Failed to fetch summary details", err))
 		return
 	}
-	defer dRows.Close()
+	defer detailRows.Close()
 
-	for dRows.Next() {
-		var month, recType string
-		cd := models.CategoryDetail{}
-		if err := dRows.Scan(&cd.ID, &month, &recType, &cd.CategoryID, &cd.Category, &cd.Amount); err != nil {
+	for detailRows.Next() {
+		var month, recordType, categoryName string
+		var categoryID int
+		var totalAmount float64
+
+		if err := detailRows.Scan(&month, &recordType, &categoryID, &categoryName, &totalAmount); err != nil {
 			errors.HandleError(c, errors.NewDatabase("Failed to parse summary detail row", err))
 			return
 		}
 
-		s := summaries[month]
-		if recType == "income" {
-			s.Incomes = append(s.Incomes, cd)
-		} else if recType == "transfer" {
-			continue
-		} else {
-			s.Expenses = append(s.Expenses, cd)
+		summary := summaries[month]
+		detail := models.CategoryDetail{
+			CategoryID: categoryID,
+			Category:   categoryName,
+			Amount:     totalAmount,
 		}
-		summaries[month] = s
+
+		if recordType == "income" {
+			summary.Incomes = append(summary.Incomes, detail)
+		} else {
+			summary.Expenses = append(summary.Expenses, detail)
+		}
+		summaries[month] = summary
 	}
-	if err := dRows.Err(); err != nil {
-		errors.HandleError(c, errors.NewDatabase("Error iterating summary detail rows", err))
+
+	c.JSON(http.StatusOK, gin.H{"summary": summaries})
+}
+
+func (h *Handler) GetSummaryForFilters(c *gin.Context) {
+	// query params
+	startDate := c.Query("start_date")
+	endDate := c.Query("end_date")
+	month := c.Query("month")
+	category := c.Query("category")
+	recordType := c.Query("type")
+	groupBy := c.Query("group_by")
+
+	validator := validation.NewValidator()
+	var validationErrs errors.ValidationErrors
+
+	// Ensure the summary table is updated before fetching
+	if err := h.UpdateSummary(); err != nil {
+		errors.HandleError(c, err)
 		return
 	}
 
-	res := models.SummaryResponse{
-		Summaries: summaries,
-		PaginationMetadata: models.PaginationMetadata{
-			Page:  queryParams.Page,
-			Limit: queryParams.Limit,
-		},
-	}
+	var filters []string
+	var args []interface{}
 
-	c.JSON(http.StatusOK, res)
-}
-
-// monthRangeFromQuery returns YYYY-MM formatted from/to bounds for queries.
-// It respects QueryParams.From/To (if present) and TimeFrame params (timeframe/year/quarter/month).
-// If nothing provided, returns very wide bounds (min..max) that will match your summary table.
-func monthRangeFromQuery(q *models.QueryParams) (from string, to string) {
-	// defaults (wide)
-	from = "0000-01"
-	to = time.Now().Format("2006-01")
-
-	// explicit From/To take precedence if provided
-	if q.From != "" {
-		// expect q.From in "YYYY-MM" or "YYYY-MM-DD"; normalize to YYYY-MM
-		if len(q.From) >= 7 {
-			from = q.From[:7]
+	if startDate != "" {
+		startDate, err := utils.ParseDate(startDate)
+		if err != nil {
+			validationErrs = append(validationErrs, errors.NewValidationError("start_date", "Start date must be in YYYY-MM-DD format", startDate))
 		}
+		filters = append(filters, "r.date >= ?")
+		args = append(args, startDate)
 	}
-	if q.To != "" {
-		if len(q.To) >= 7 {
-			to = q.To[:7]
+	if endDate != "" {
+		endDate, err := utils.ParseDate(endDate)
+		if err != nil {
+			validationErrs = append(validationErrs, errors.NewValidationError("end_date", "End date must be in YYYY-MM-DD format", endDate))
+			errors.HandleValidationErrors(c, validationErrs)
+			return
 		}
+		filters = append(filters, "r.date <= ?")
+		args = append(args, endDate)
+	}
+	if month != "" {
+		startDate := month + "-01" // e.g., "2025-08-01"
+		endDate := month + "-31"   // works fine, SQLite will handle shorter months
+		filters = append(filters, "r.date BETWEEN ? AND ?")
+		args = append(args, startDate, endDate)
+	}
+	if category != "" {
+		filters = append(filters, "c.name = ?")
+		args = append(args, category)
+	}
+	if recordType != "" {
+		filters = append(filters, "r.type = ?")
+		args = append(args, recordType)
+	}
+	allowedGroups := map[string]string{
+		"month":    "strftime('%Y-%m', r.date)",
+		"category": "c.name",
+		"type":     "r.type",
 	}
 
-	// timeframe override (only if timeframe provided)
-	if q.TimeFrame != "" {
-		tf := strings.ToLower(q.TimeFrame)
-		switch tf {
-		case string(models.Year):
-			year := q.Year
-			if year != "" {
-				from = fmt.Sprintf("%s-01", year)
-				to = fmt.Sprintf("%s-12", year)
-			}
-		case string(models.Quarter):
-			year := q.Year
-			quarter := q.Quarter
-			if year != "" && quarter != "" {
-				switch quarter {
-				case "1":
-					from, to = fmt.Sprintf("%s-01", year), fmt.Sprintf("%s-03", year)
-				case "2":
-					from, to = fmt.Sprintf("%s-04", year), fmt.Sprintf("%s-06", year)
-				case "3":
-					from, to = fmt.Sprintf("%s-07", year), fmt.Sprintf("%s-09", year)
-				case "4":
-					from, to = fmt.Sprintf("%s-10", year), fmt.Sprintf("%s-12", year)
-				}
-			}
-		case string(models.Month):
-			year := q.Year
-			month := q.Month
-			if year != "" && month != "" {
-				// ensure month is two digits
-				if len(month) == 1 {
-					month = "0" + month
-				}
-				from = fmt.Sprintf("%s-%s", year, month)
-				to = from
-			}
-		}
+	groupCol, ok := allowedGroups[groupBy]
+	if !ok || groupBy == "" {
+		groupBy = "month"
+		groupCol = allowedGroups["month"]
 	}
 
-	return from, to
-}
-
-// BuildSummaryWhereClause builds an SQL fragment and args for filtering the summary_details table.
-// NOTE: returns fragment WITHOUT a leading "WHERE". If it returns empty string, don't append filters.
-func buildSummaryWhereClause(q *models.QueryParams) (string, []interface{}) {
-	clauses := make([]string, 0, 6)
-	args := make([]interface{}, 0, 6)
-
-	// Type: income | expense | transfer
-	if q.Type != "" {
-		clauses = append(clauses, "type = ?")
-		args = append(args, string(q.Type))
+	validationErrs = append(validationErrs, validator.GetErrors()...)
+	if len(validationErrs) > 0 {
+		errors.HandleValidationErrors(c, validationErrs)
+		return
 	}
 
-	// Category: could be numeric id or name fragment
-	if strings.TrimSpace(q.Category) != "" {
-		c := strings.TrimSpace(q.Category)
-		// if it's an integer, treat as category_id
-		if id, err := strconv.Atoi(c); err == nil {
-			clauses = append(clauses, "category_id = ?")
-			args = append(args, id)
-		} else {
-			// match name case-insensitively using LIKE; using '%' wrapper for contains
-			clauses = append(clauses, "LOWER(category_name) LIKE ?")
-			args = append(args, "%"+strings.ToLower(c)+"%")
-		}
+	query := fmt.Sprintf(`
+    SELECT 
+        %s AS %s,
+        COALESCE(SUM(amount), 0) AS amount,
+        c.name AS category
+    FROM records r
+    JOIN categories c ON r.category_id = c.id
+	`, groupCol, groupBy)
+
+	if len(filters) > 0 {
+		query += " WHERE " + strings.Join(filters, " AND ")
 	}
 
-	// Amount filters
-	// summary_details.amount holds aggregated amounts per category/month
-	if q.MinAmount != 0 {
-		clauses = append(clauses, "amount >= ?")
-		args = append(args, q.MinAmount)
-	}
-	if q.MaxAmount != 0 {
-		clauses = append(clauses, "amount <= ?")
-		args = append(args, q.MaxAmount)
-	}
+	query += " GROUP BY category_id, " + groupBy
 
-	// Search: match category_name (summary_details doesn't have record description)
-	if strings.TrimSpace(q.Search) != "" {
-		s := strings.TrimSpace(q.Search)
-		clauses = append(clauses, "LOWER(category_name) LIKE ?")
-		args = append(args, "%"+strings.ToLower(s)+"%")
-	}
+	slog.Debug("Executing query", "query", query, "args", args)
 
-	// If no clauses, return empty to indicate "no extra filters"
-	if len(clauses) == 0 {
-		return "", nil
-	}
-
-	return strings.Join(clauses, " AND "), args
-}
-
-func getSummaryInDateRange(h *Handler, c *gin.Context, from, to string) *models.Summary {
-	query := `SELECT
-  			COALESCE((SELECT SUM(CASE WHEN type='expense' THEN amount ELSE 0 END)
-			FROM records
-            WHERE date BETWEEN $1 AND $2), 0) AS total_expense,
-
-  			COALESCE((SELECT SUM(CASE WHEN type='income' THEN amount ELSE 0 END)
-			FROM records
-			WHERE date BETWEEN $1 AND $2), 0) AS total_income,
-  			
-			COALESCE((SELECT SUM(
-              CASE
-                WHEN type = 'income' THEN amount
-                WHEN type = 'expense' THEN -amount
-                ELSE 0
-              END)
-            FROM records
-            WHERE date < $1), 0) AS opening_balance,
-
-			-- optional: net in range and closing
-			COALESCE((SELECT SUM(
-              CASE
-                WHEN type = 'income' THEN amount
-                WHEN type = 'expense' THEN -amount
-                ELSE 0
-              END)
-            FROM records
-            WHERE date BETWEEN $1 AND $2), 0) AS net_in_range,
-
-			( -- closing = opening + net
-			COALESCE((SELECT SUM(
-              CASE
-                WHEN type = 'income' THEN amount
-                WHEN type = 'expense' THEN -amount
-                ELSE 0
-              END)
-            FROM records
-            WHERE date < $1), 0)
-    		+
-    		COALESCE((SELECT SUM(
-              CASE
-                WHEN type = 'income' THEN amount
-                WHEN type = 'expense' THEN -amount
-                ELSE 0
-              END)
-            FROM records
-            WHERE date BETWEEN $1 AND $2), 0)
-  			) AS closing_balance;`
-
-	row, err := h.DB.Query(query, from, to)
+	rows, err := h.DB.Query(query, args...)
 	if err != nil {
-		errors.HandleError(c, errors.NewDatabase("Failed to fetch summary from records", err))
-		return nil
+		appErr := errors.NewDatabase("Failed to retrieve records", err)
+		errors.HandleError(c, appErr)
+		return
 	}
-	defer row.Close()
-	var totalExpense, totalIncome, openingBalance, netInRange, closingBalance float64
-	if row.Next() {
-		if err := row.Scan(&totalExpense, &totalIncome, &openingBalance, &netInRange, &closingBalance); err != nil {
-			errors.HandleError(c, errors.NewDatabase("Failed to scan summary from records", err))
-			return nil
+	defer rows.Close()
+
+	var summaries []map[string]interface{}
+
+	for rows.Next() {
+		var amount float64
+		var group_by string
+		var category string
+		err := rows.Scan(&group_by, &amount, &category)
+
+		if err != nil {
+			appErr := errors.NewDatabase("Failed to parse summary row", err)
+			errors.HandleError(c, appErr)
+			return
 		}
+
+		summaries = append(summaries, gin.H{
+			groupBy:    group_by,
+			"category": category,
+			"amount":   amount,
+		})
 	}
 
-	summary := models.Summary{
-		TotalExpense: totalExpense,
-		TotalIncome:  totalIncome,
-		Net:          netInRange,
-		Opening:      openingBalance,
-		Closing:      closingBalance,
+	if err = rows.Err(); err != nil {
+		appErr := errors.NewDatabase("Error iterating through summary rows", err)
+		errors.HandleError(c, appErr)
+		return
 	}
 
-	if totalExpense == 0 && totalIncome == 0 {
-		return &summary
+	slog.Info("Summary retrieved successfully", "count", len(summaries))
+	c.JSON(http.StatusOK, summaries)
+}
+
+func (h *Handler) GetSummaryForFilter(c *gin.Context) {
+	if err := h.UpdateSummary(); err != nil {
+		errors.HandleError(c, err)
+		return
 	}
 
-	// now we get type wise records from records table
-	detailQuery := `
+	pathParts := strings.Split(c.Request.URL.Path, "/")
+	if len(pathParts) < 2 {
+		appErr := errors.NewInvalidInput("Invalid URL path", nil)
+		errors.HandleError(c, appErr)
+		return
+	}
+	filterType := pathParts[len(pathParts)-2]
+	value := pathParts[len(pathParts)-1]
+
+	switch filterType {
+	case "month":
+		h.GetSummaryByMonth(c, GetSummaryByDateParams{Month: &value})
+	case "category":
+		h.GetSummaryByCategory(c, value)
+	case "type":
+		h.GetSummaryByType(c, value)
+	default:
+		appErr := errors.NewInvalidInput("Invalid filter type", nil).WithDetails(map[string]interface{}{
+			"filter_type":   filterType,
+			"allowed_types": []string{"month", "category", "type"},
+		})
+		errors.HandleError(c, appErr)
+	}
+}
+
+func (h *Handler) GetSummaryByMonth(c *gin.Context, params GetSummaryByDateParams) {
+	var month string
+	if params.Month != nil {
+		month = *params.Month
+	}
+
+	var startDateStr, endDateStr string
+	if params.StartDate != nil && params.EndDate != nil {
+		startDateStr = *params.StartDate
+		endDateStr = *params.EndDate
+	}
+
+	var validationErrs errors.ValidationErrors
+
+	// Always ensure summary table is up-to-date
+	if err := h.UpdateSummary(); err != nil {
+		errors.HandleError(c, err)
+		return
+	}
+
+	// --- CASE 1: Month summary ---
+	if month != "" {
+		if _, err := time.Parse("2006-01", month); err != nil {
+			validationErrs = append(validationErrs, errors.NewValidationError("month", "Month must be in YYYY-MM format", month))
+			errors.HandleValidationErrors(c, validationErrs)
+			return
+		}
+
+		row := h.DB.QueryRow(`
+			SELECT total_income, total_expense, opening_balance, net_balance, closing_balance
+			FROM summary
+			WHERE month = ?
+		`, month)
+
+		var totalIncome, totalExpense, openingBalance, netBalance, closingBalance float64
+		if err := row.Scan(&totalIncome, &totalExpense, &openingBalance, &netBalance, &closingBalance); err != nil {
+			appErr := errors.NewNotFound("No summary found for the given month", err)
+			errors.HandleError(c, appErr)
+			return
+		}
+
+		// Fetch category-level details
+		rows, err := h.DB.Query(`
+			SELECT type, category_id, category_name, SUM(amount) AS amount
+			FROM summary_details
+			WHERE month = ?
+			GROUP BY type, category_id, category_name
+		`, month)
+		if err != nil {
+			errors.HandleError(c, errors.NewDatabase("Failed to get summary details", err))
+			return
+		}
+		defer rows.Close()
+
+		var incomes, expenses []models.CategoryDetail
+		for rows.Next() {
+			var recordType, categoryName string
+			var categoryID int
+			var amount float64
+			if err := rows.Scan(&recordType, &categoryID, &categoryName, &amount); err != nil {
+				errors.HandleError(c, errors.NewDatabase("Failed to parse summary detail row", err))
+				return
+			}
+
+			detail := models.CategoryDetail{
+				CategoryID: categoryID,
+				Category:   categoryName,
+				Amount:     amount,
+			}
+			if recordType == "income" {
+				incomes = append(incomes, detail)
+			} else {
+				expenses = append(expenses, detail)
+			}
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"summary": models.MonthlySummary{
+				Expenses:     expenses,
+				Incomes:      incomes,
+				Net:          netBalance,
+				Opening:      openingBalance,
+				Closing:      closingBalance,
+				TotalExpense: totalExpense,
+				TotalIncome:  totalIncome,
+			},
+		})
+		return
+	}
+
+	// --- CASE 2: Date range summary ---
+	if startDateStr == "" || endDateStr == "" {
+		validationErrs = append(validationErrs, errors.NewValidationError("date_range", "Both start_date and end_date must be provided", nil))
+		errors.HandleValidationErrors(c, validationErrs)
+		return
+	}
+
+	startDate, err := utils.ParseDate(startDateStr)
+	if err != nil {
+		validationErrs = append(validationErrs, errors.NewValidationError("start_date", "Invalid start date format", startDateStr))
+	}
+	endDate, err := utils.ParseDate(endDateStr)
+	if err != nil {
+		validationErrs = append(validationErrs, errors.NewValidationError("end_date", "Invalid end date format", endDateStr))
+	}
+	if len(validationErrs) > 0 {
+		errors.HandleValidationErrors(c, validationErrs)
+		return
+	}
+
+	// Get opening balance = closing balance before startDate
+	var openingBalance float64
+	if err = h.DB.QueryRow(`
+		SELECT COALESCE(SUM(
+			CASE WHEN type = 'income' THEN amount
+			     WHEN type = 'transfer' THEN amount
+			     ELSE -amount END
+		), 0)
+		FROM records
+		WHERE date < ?
+	`, startDate).Scan(&openingBalance); err != nil {
+
+		errors.HandleError(c, errors.NewDatabase("Failed to get opening balance", err))
+		return
+	}
+
+	// Aggregate totals in range
+	var totalIncome, totalExpense, totalTransfer float64
+	if err = h.DB.QueryRow(`
 		SELECT 
-			r.id, 
-			strftime('%Y-%m', r.date) AS month,
-			r.type,
-			c.id AS category_id,
-			c.name AS category_name,
-			SUM(r.amount) AS amount
+			COALESCE(SUM(CASE WHEN type='income' THEN amount END),0),
+			COALESCE(SUM(CASE WHEN type='expense' THEN amount END),0),
+			COALESCE(SUM(CASE WHEN type='transfer' THEN amount END),0)
+		FROM records
+		WHERE date BETWEEN ? AND ?
+	`, startDate, endDate).Scan(&totalIncome, &totalExpense, &totalTransfer); err != nil {
+		errors.HandleError(c, errors.NewDatabase("Failed to get totals in range", err))
+		return
+	}
+
+	netBalance := totalIncome - totalExpense + totalTransfer
+	closingBalance := openingBalance + netBalance
+
+	// Category details
+	rows, err := h.DB.Query(`
+		SELECT type, category_id, c.name, SUM(amount)
 		FROM records r
 		JOIN categories c ON r.category_id = c.id
-		WHERE r.type IN ('income', 'expense')
-		AND r.date >= $1
-		AND r.date <= $2
-		GROUP BY r.type, r.date;
-		`
-
-	dRows, err := h.DB.Query(detailQuery, from, to)
+		WHERE r.date BETWEEN ? AND ?
+		GROUP BY type, category_id, c.name
+	`, startDate, endDate)
 	if err != nil {
-		errors.HandleError(c, errors.NewDatabase("Failed to fetch summary details", err))
-		return nil
+		errors.HandleError(c, errors.NewDatabase("Failed to fetch category details", err))
+		return
 	}
-	defer dRows.Close()
+	defer rows.Close()
 
-	for dRows.Next() {
-		var month, recType string
-		cd := models.CategoryDetail{}
-		if err := dRows.Scan(&cd.ID, &month, &recType, &cd.CategoryID, &cd.Category, &cd.Amount); err != nil {
-			errors.HandleError(c, errors.NewDatabase("Failed to parse summary detail row", err))
-			return nil
+	var incomes, expenses []models.CategoryDetail
+	for rows.Next() {
+		var recordType, categoryName string
+		var categoryID int
+		var amount float64
+		if err := rows.Scan(&recordType, &categoryID, &categoryName, &amount); err != nil {
+			errors.HandleError(c, errors.NewDatabase("Failed to parse category row", err))
+			return
 		}
-
-		if recType == "income" {
-			summary.Incomes = append(summary.Incomes, cd)
-		} else if recType == "transfer" {
-			continue
+		detail := models.CategoryDetail{
+			CategoryID: categoryID,
+			Category:   categoryName,
+			Amount:     amount,
+		}
+		if recordType == "income" {
+			incomes = append(incomes, detail)
 		} else {
-			summary.Expenses = append(summary.Expenses, cd)
+			expenses = append(expenses, detail)
 		}
 	}
 
-	if err := dRows.Err(); err != nil {
-		errors.HandleError(c, errors.NewDatabase("Error iterating summary detail rows", err))
-		return nil
+	c.JSON(http.StatusOK, gin.H{
+		"summary": models.MonthlySummary{
+			Expenses:     expenses,
+			Incomes:      incomes,
+			Net:          netBalance,
+			Opening:      openingBalance,
+			Closing:      closingBalance,
+			TotalExpense: totalExpense,
+			TotalIncome:  totalIncome,
+		},
+	})
+}
+
+func (h *Handler) GetSummaryByCategory(c *gin.Context, category string) {
+	row := h.DB.QueryRow(`
+		SELECT 
+			SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) AS income,
+			SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) AS expense
+		FROM records
+		JOIN categories ON records.category_id = categories.id
+		WHERE categories.name = ?
+	`, category)
+
+	var income, expense float64
+	err := row.Scan(&income, &expense)
+	if err != nil {
+		appErr := errors.NewDatabase("Failed to get category summary", err)
+		errors.HandleError(c, appErr)
+		return
 	}
 
-	return &summary
+	if income == 0 && expense == 0 {
+		appErr := errors.NewNotFound("No data found for category", nil).WithDetails(map[string]interface{}{
+			"category": category,
+		})
+		errors.HandleError(c, appErr)
+		return
+	}
+
+	netBalance := income - expense
+
+	slog.Info("Category summary retrieved", "category", category)
+	c.JSON(http.StatusOK, gin.H{
+		"category":        category,
+		"total_income":    income,
+		"total_expense":   expense,
+		"net_balance":     netBalance,
+		"closing_balance": netBalance, // assuming no opening balance for category-level
+	})
+}
+
+func (h *Handler) GetSummaryByType(c *gin.Context, recordType string) {
+	if recordType != "income" && recordType != "expense" && recordType != "transfer" {
+		appErr := errors.NewInvalidInput("Invalid record type", nil).WithDetails(map[string]interface{}{
+			"type":          recordType,
+			"allowed_types": []string{"income", "expense", "transfer"},
+		})
+		errors.HandleError(c, appErr)
+		return
+	}
+
+	var total float64
+
+	err := h.DB.QueryRow(`
+		SELECT SUM(amount) FROM records WHERE type = ?
+	`, recordType).Scan(&total)
+
+	if err != nil {
+		appErr := errors.NewDatabase("Failed to get type summary", err)
+		errors.HandleError(c, appErr)
+		return
+	}
+
+	if total == 0 {
+		appErr := errors.NewNotFound("No records found for type", nil).WithDetails(map[string]interface{}{
+			"type": recordType,
+		})
+		errors.HandleError(c, appErr)
+		return
+	}
+
+	// If "type" is income, net is positive; if expense, net is negative
+	netBalance := total
+	if recordType == "expense" {
+		netBalance = -total
+	}
+
+	slog.Info("Type summary retrieved", "type", recordType, "total", total)
+	c.JSON(http.StatusOK, gin.H{
+		"type":            recordType,
+		"total":           total,
+		"net_balance":     netBalance,
+		"closing_balance": netBalance, // similar logic as above
+	})
 }

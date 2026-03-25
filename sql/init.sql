@@ -27,7 +27,6 @@ CREATE TABLE IF NOT EXISTS summary (
 );
 
 CREATE TABLE IF NOT EXISTS summary_details (
-  ID INTEGER PRIMARY KEY REFERENCES records(id),
   month TEXT NOT NULL,  -- format: YYYY-MM
   type TEXT NOT NULL CHECK (type IN ('income', 'expense','transfer')),
   category_id INTEGER NOT NULL,
