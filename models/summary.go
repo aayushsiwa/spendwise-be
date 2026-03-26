@@ -8,13 +8,13 @@ type CategoryDetail struct {
 }
 
 type Summary struct {
-	Expenses     []CategoryDetail `json:"expenses,omitempty"`
-	Incomes      []CategoryDetail `json:"incomes,omitempty"`
-	Net          float64          `json:"net,omitempty"`
-	Opening      float64          `json:"opening,omitempty"`
-	Closing      float64          `json:"closing,omitempty"`
-	TotalExpense float64          `json:"total_expense,omitempty"`
-	TotalIncome  float64          `json:"total_income,omitempty"`
+	Expenses     []CategoryDetail `json:"expenses"`
+	Incomes      []CategoryDetail `json:"incomes"`
+	Net          float64          `json:"net"`
+	Opening      float64          `json:"opening"`
+	Closing      float64          `json:"closing"`
+	TotalExpense float64          `json:"total_expense"`
+	TotalIncome  float64          `json:"total_income"`
 }
 
 type SummaryResponse struct {
