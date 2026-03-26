@@ -62,18 +62,6 @@ func NewRoutes(h *handlers.Handler) Routes {
 			Pattern:     "/summary",
 			HandlerFunc: h.GetSummary,
 		},
-		{
-			Name:        "GetSummaryForFilters",
-			Method:      "GET",
-			Pattern:     "/summary/filter",
-			HandlerFunc: h.GetSummaryForFilters,
-		},
-		{
-			Name:        "GetSummaryForFilter",
-			Method:      "GET",
-			Pattern:     "/summary/:filter/:value",
-			HandlerFunc: h.GetSummaryForFilter,
-		},
 		// Import
 		{
 			Name:        "ImportCSV",
