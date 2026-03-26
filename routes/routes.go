@@ -113,6 +113,12 @@ func NewRoutes(h *handlers.Handler) Routes {
 				c.JSON(200, gin.H{"status": "healthy"})
 			},
 		},
+		{
+			Name:        "RefreshBalance",
+			Method:      "POST",
+			Pattern:     "/refresh",
+			HandlerFunc: h.RecalculateBalances,
+		},
 	}
 }
 
