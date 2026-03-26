@@ -154,8 +154,23 @@ func (h *Handler) GetSummary(c *gin.Context) {
 		return
 	}
 
-	if queryParams.From != "" || queryParams.To != "" {
-		summary := getSummaryInDateRange(h, c, queryParams.From, queryParams.To)
+	if queryParams.From != "" || queryParams.To != "" || models.TimeFrame(queryParams.TimeFrame) == models.TimeFrameMonth {
+		year := queryParams.Year
+		if year == "" {
+			year = strconv.Itoa(time.Now().Year())
+		}
+		month := queryParams.Month
+		if month == "" {
+			month = fmt.Sprintf("%02d", time.Now().Month())
+		}
+
+		from := fmt.Sprintf("%s-%s-01", year, month)
+		to := fmt.Sprintf("%s-%s-31", year, month)
+		if queryParams.From != "" || queryParams.To != "" {
+			from, to = queryParams.From, queryParams.To
+		}
+
+		summary := getSummaryInDateRange(h, c, from, to)
 
 		c.JSON(http.StatusOK, gin.H{"summary": &summary})
 		return
@@ -314,13 +329,13 @@ func monthRangeFromQuery(q *models.QueryParams) (from string, to string) {
 	if q.TimeFrame != "" {
 		tf := strings.ToLower(q.TimeFrame)
 		switch tf {
-		case string(models.Year):
+		case string(models.TimeFrameYear):
 			year := q.Year
 			if year != "" {
 				from = fmt.Sprintf("%s-01", year)
 				to = fmt.Sprintf("%s-12", year)
 			}
-		case string(models.Quarter):
+		case string(models.TimeFrameQuarter):
 			year := q.Year
 			quarter := q.Quarter
 			if year != "" && quarter != "" {
@@ -335,7 +350,7 @@ func monthRangeFromQuery(q *models.QueryParams) (from string, to string) {
 					from, to = fmt.Sprintf("%s-10", year), fmt.Sprintf("%s-12", year)
 				}
 			}
-		case string(models.Month):
+		case string(models.TimeFrameMonth):
 			year := q.Year
 			month := q.Month
 			if year != "" && month != "" {
