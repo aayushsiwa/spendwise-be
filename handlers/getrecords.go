@@ -3,7 +3,6 @@ package handlers
 import (
 	"aayushsiwa/expense-tracker/errors"
 	"aayushsiwa/expense-tracker/models"
-	"aayushsiwa/expense-tracker/utils"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -12,7 +11,7 @@ import (
 )
 
 func (h *Handler) GetRecords(c *gin.Context) {
-	queryParams := &models.RecordsQueryParams{
+	queryParams := &models.QueryParams{
 		PaginationFilterParams: models.PaginationFilterParams{
 			Limit: 10,
 			Page:  1,
@@ -28,7 +27,7 @@ func (h *Handler) GetRecords(c *gin.Context) {
 	offset := (queryParams.Page - 1) * queryParams.Limit
 
 	// Build WHERE clause and arguments once (reusable for select + count)
-	whereClause, filterArgs := utils.BuildWhereClause(queryParams)
+	whereClause, filterArgs := buildWhereClause(queryParams)
 
 	// Base SELECT query
 	selectQuery := `
@@ -46,6 +45,7 @@ func (h *Handler) GetRecords(c *gin.Context) {
 
 	rows, err := h.DB.Query(selectQuery, selectArgs...)
 	if err != nil {
+		slog.Error("Failed to execute select query", "error", err)
 		appErr := errors.NewDatabase("Failed to retrieve records", err)
 		errors.HandleError(c, appErr)
 		return
@@ -123,15 +123,45 @@ func (h *Handler) GetRecords(c *gin.Context) {
 		"total_pages", totalPages,
 	)
 
-	response := gin.H{
-		"records":     records,
-		"page":        queryParams.Page,
-		"limit":       queryParams.Limit,
-		"total_count": totalCount,
-		"total_pages": totalPages,
-		"has_next":    hasNext,
-		"has_prev":    hasPrev,
+	res := models.RecordsResponse{
+		Records: records,
+		PaginationMetadata: models.PaginationMetadata{
+			Page:       queryParams.Page,
+			Limit:      queryParams.Limit,
+			TotalCount: totalCount,
+			TotalPages: totalPages,
+			HasNext:    hasNext,
+			HasPrev:    hasPrev,
+		},
 	}
 
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, res)
+}
+
+func buildWhereClause(q *models.QueryParams) (string, []interface{}) {
+	filters := make([]string, 0, 4)
+	args := make([]interface{}, 0, 4)
+
+	if q.Type != "" {
+		filters = append(filters, "r.type = ?")
+		args = append(args, q.Type)
+	}
+	if q.Category != "" {
+		filters = append(filters, "c.name = ?")
+		args = append(args, q.Category)
+	}
+	if q.From != "" {
+		filters = append(filters, "r.date >= ?")
+		args = append(args, q.From)
+	}
+	if q.To != "" {
+		filters = append(filters, "r.date <= ?")
+		args = append(args, q.To)
+	}
+
+	if len(filters) == 0 {
+		return "", args
+	}
+
+	return " WHERE " + strings.Join(filters, " AND "), args
 }

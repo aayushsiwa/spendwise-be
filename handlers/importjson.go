@@ -14,11 +14,19 @@ import (
 )
 
 func (h *Handler) ImportJSON(c *gin.Context) {
+	ctx := c.Request.Context()
 	var records []models.Record
 	if err := c.ShouldBindJSON(&records); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON array"})
 		return
 	}
+
+	tx, err := h.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to start transaction"})
+		return
+	}
+	defer tx.Rollback()
 
 	// Update summary before importing
 	if err := h.UpdateSummary(); err != nil {
@@ -38,6 +46,7 @@ func (h *Handler) ImportJSON(c *gin.Context) {
 
 		date, err := utils.ParseDate(dateStr)
 		if err != nil {
+			slog.ErrorContext(ctx, "Failed to parse date", "date", dateStr, "error", err)
 			continue
 		}
 
@@ -89,7 +98,7 @@ func (h *Handler) ImportJSON(c *gin.Context) {
 		importedCount++
 	}
 
-	if err := h.RecalculateBalances(); err != nil {
+	if err := h.recalculateBalances(ctx, tx); err != nil {
 		log.Printf("Failed to recalculate balances: %v", err)
 	}
 

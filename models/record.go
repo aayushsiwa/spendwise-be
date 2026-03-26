@@ -5,7 +5,7 @@ type RecordType string
 const (
 	Income   RecordType = "income"
 	Expense  RecordType = "expense"
-	Transfer RecordType = "transfer" // optional
+	Transfer RecordType = "transfer"
 )
 
 type Record struct {
@@ -19,8 +19,7 @@ type Record struct {
 	Balance     float64    `json:"balance"`
 }
 
-type RecordsQueryParams struct {
-	PaginationFilterParams
-	BaseQueryParams
-	Search string `binding:"omitempty" form:"search" json:"search"`
+type RecordsResponse struct {
+	Records []Record `json:"records"`
+	PaginationMetadata
 }

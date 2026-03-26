@@ -62,18 +62,6 @@ func NewRoutes(h *handlers.Handler) Routes {
 			Pattern:     "/summary",
 			HandlerFunc: h.GetSummary,
 		},
-		{
-			Name:        "GetSummaryForFilters",
-			Method:      "GET",
-			Pattern:     "/summary/filter",
-			HandlerFunc: h.GetSummaryForFilters,
-		},
-		{
-			Name:        "GetSummaryForFilter",
-			Method:      "GET",
-			Pattern:     "/summary/:filter/:value",
-			HandlerFunc: h.GetSummaryForFilter,
-		},
 		// Import
 		{
 			Name:        "ImportCSV",
@@ -124,6 +112,12 @@ func NewRoutes(h *handlers.Handler) Routes {
 				}
 				c.JSON(200, gin.H{"status": "healthy"})
 			},
+		},
+		{
+			Name:        "RefreshBalance",
+			Method:      "POST",
+			Pattern:     "/refresh",
+			HandlerFunc: h.RecalculateBalances,
 		},
 	}
 }
