@@ -9,9 +9,9 @@ type PaginationFilterParams struct {
 type TimeFrame string
 
 const (
-	Year    TimeFrame = "year"
-	Quarter TimeFrame = "quarter"
-	Month   TimeFrame = "month"
+	TimeFrameYear    TimeFrame = "year"
+	TimeFrameQuarter TimeFrame = "quarter"
+	TimeFrameMonth   TimeFrame = "month"
 )
 
 // TimeFrameParams is the structure of query params for timeframe-based requests.
