@@ -31,9 +31,9 @@ func (h *Handler) GetRecords(c *gin.Context) {
 
 	// Base SELECT query
 	selectQuery := `
-		SELECT r.id, r.date, r.description, c.name as category, r.amount, r.type, r.note, r.balance
+		SELECT r.id, r.date, r.description, COALESCE(c.name, '') as category, r.amount, r.type, r.note, r.balance
 		FROM records r
-		JOIN categories c ON r.category_id = c.id
+		LEFT JOIN categories c ON r.category_id = c.id
 	` + whereClause + `
 		ORDER BY r.date DESC
 		LIMIT ? OFFSET ?
@@ -52,10 +52,7 @@ func (h *Handler) GetRecords(c *gin.Context) {
 	}
 	defer rows.Close()
 
-	var records []models.Record
-
-	search := strings.ToLower(strings.TrimSpace(queryParams.Search))
-	hasSearch := search != ""
+	records := make([]models.Record, 0)
 
 	for rows.Next() {
 		var rec models.Record
@@ -74,13 +71,6 @@ func (h *Handler) GetRecords(c *gin.Context) {
 			return
 		}
 
-		// If Description is decrypted before this, keep in-memory search filter:
-		if hasSearch {
-			if !strings.Contains(strings.ToLower(rec.Description), search) {
-				continue
-			}
-		}
-
 		records = append(records, rec)
 	}
 
@@ -94,7 +84,7 @@ func (h *Handler) GetRecords(c *gin.Context) {
 	countQuery := `
 		SELECT COUNT(*)
 		FROM records r
-		JOIN categories c ON r.category_id = c.id
+		LEFT JOIN categories c ON r.category_id = c.id
 	` + whereClause
 
 	slog.Debug("Executing count query", "query", strings.TrimSpace(countQuery), "args", filterArgs)
@@ -116,7 +106,7 @@ func (h *Handler) GetRecords(c *gin.Context) {
 
 	slog.Info("Records retrieved successfully",
 		"count", len(records),
-		"filters_applied", whereClause != "" || hasSearch,
+		"filters_applied", whereClause != "",
 		"page", queryParams.Page,
 		"limit", queryParams.Limit,
 		"total_count", totalCount,
@@ -139,8 +129,8 @@ func (h *Handler) GetRecords(c *gin.Context) {
 }
 
 func buildWhereClause(q *models.QueryParams) (string, []interface{}) {
-	filters := make([]string, 0, 4)
-	args := make([]interface{}, 0, 4)
+	filters := make([]string, 0, 5)
+	args := make([]interface{}, 0, 5)
 
 	if q.Type != "" {
 		filters = append(filters, "r.type = ?")
@@ -157,6 +147,10 @@ func buildWhereClause(q *models.QueryParams) (string, []interface{}) {
 	if q.To != "" {
 		filters = append(filters, "r.date <= ?")
 		args = append(args, q.To)
+	}
+	if q.Search != "" {
+		filters = append(filters, "LOWER(r.description) LIKE ?")
+		args = append(args, "%"+strings.ToLower(q.Search)+"%")
 	}
 
 	if len(filters) == 0 {
