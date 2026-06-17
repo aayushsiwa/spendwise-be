@@ -61,24 +61,18 @@ func (h *Handler) CreateRecord(c *gin.Context) {
 		return
 	}
 
-	// Get summary
+	// Compute running balance from actual records
 	var currentBalance float64
-	err = h.DB.QueryRow("SELECT closing_balance FROM summary WHERE month = ?", rec.Date[:7]).Scan(&currentBalance)
-	if err == sql.ErrNoRows {
+	err = h.DB.QueryRow("SELECT COALESCE(balance, 0) FROM records ORDER BY date DESC, id DESC LIMIT 1").Scan(&currentBalance)
+	if err != nil {
 		currentBalance = 0
-	} else if err != nil {
-		appErr := errors.NewDatabase("Failed to get summary", err)
-		errors.HandleError(c, appErr)
-		return
 	}
 
-	// Update balance based on record type
 	if rec.Type == "income" {
 		currentBalance += rec.Amount
 	} else if rec.Type == "expense" {
 		currentBalance -= rec.Amount
 	}
-	// For 'transfer', balance remains unchanged
 
 	// Insert record
 	_, err = h.DB.Exec(`

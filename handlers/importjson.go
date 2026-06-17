@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"database/sql"
 	"log"
 	"log/slog"
 	"net/http"
@@ -26,12 +25,11 @@ func (h *Handler) ImportJSON(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to start transaction"})
 		return
 	}
-	defer tx.Rollback()
-
-	// Update summary before importing
-	if err := h.UpdateSummary(); err != nil {
-		slog.Warn("Failed to update summary before JSON import", "error", err)
-	}
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
 
 	importedCount := 0
 
@@ -40,7 +38,6 @@ func (h *Handler) ImportJSON(c *gin.Context) {
 			continue
 		}
 
-		// Normalize category
 		category := strings.ToLower(strings.TrimSpace(rec.Category))
 		dateStr := strings.TrimSpace(rec.Date)
 
@@ -61,22 +58,17 @@ func (h *Handler) ImportJSON(c *gin.Context) {
 			categoryID = int(lastID)
 		}
 
-		// Get summary
 		var currentBalance float64
-		err = h.DB.QueryRow("SELECT closing_balance FROM summary WHERE month = ?", date[:7]).Scan(&currentBalance)
-		if err == sql.ErrNoRows {
+		err = h.DB.QueryRow("SELECT COALESCE(balance, 0) FROM records ORDER BY date DESC, id DESC LIMIT 1").Scan(&currentBalance)
+		if err != nil {
 			currentBalance = 0
-		} else if err != nil {
-			continue
 		}
 
-		// Update balance based on record type
 		if rec.Type == "income" {
 			currentBalance += rec.Amount
 		} else if rec.Type == "expense" {
 			currentBalance -= rec.Amount
 		}
-		// For 'transfer', balance remains unchanged
 
 		customID, err := h.GenerateCustomID(date)
 		if err != nil {
@@ -90,16 +82,20 @@ func (h *Handler) ImportJSON(c *gin.Context) {
 			continue
 		}
 
-		// Update summary table
-		if err := h.UpdateSummary(); err != nil {
-			slog.Warn("Failed to update summary after record creation", "record_id", rec.ID, "error", err)
-		}
-
 		importedCount++
 	}
 
 	if err := h.recalculateBalances(ctx, tx); err != nil {
 		log.Printf("Failed to recalculate balances: %v", err)
+	}
+
+	if err := h.UpdateSummary(); err != nil {
+		slog.Warn("Failed to update summary after JSON import", "error", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
+		return
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
