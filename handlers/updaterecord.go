@@ -13,6 +13,7 @@ import (
 )
 
 func (h *Handler) PatchRecord(c *gin.Context) {
+	ctx := c.Request.Context()
 	idStr := c.Param("id")
 
 	// Validate ID parameter
@@ -78,6 +79,19 @@ func (h *Handler) PatchRecord(c *gin.Context) {
 		appErr := errors.NewDatabase("Failed to update record", err)
 		errors.HandleError(c, appErr)
 		return
+	}
+
+	// Recalculate all balances
+	tx, err := h.DB.Begin()
+	if err != nil {
+		slog.Warn("Failed to start transaction for balance recalculation", "error", err)
+	} else {
+		if err := h.recalculateBalances(ctx, tx); err != nil {
+			slog.Warn("Failed to recalculate balances after record update", "record_id", id, "error", err)
+			tx.Rollback()
+		} else {
+			tx.Commit()
+		}
 	}
 
 	// Update summary
