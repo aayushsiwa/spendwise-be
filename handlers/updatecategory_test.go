@@ -1,6 +1,11 @@
 package handlers
 
-import "testing"
+import (
+	"database/sql"
+	"testing"
+
+	"github.com/gin-gonic/gin"
+)
 
 func TestHandler_UpdateCategory(t *testing.T) {
 	type fields struct {

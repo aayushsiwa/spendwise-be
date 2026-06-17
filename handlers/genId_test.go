@@ -1,6 +1,9 @@
 package handlers
 
-import "testing"
+import (
+	"database/sql"
+	"testing"
+)
 
 func TestHandler_GenerateCustomID(t *testing.T) {
 	type fields struct {
