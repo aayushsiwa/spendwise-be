@@ -18,7 +18,7 @@ func (h *Handler) GetCategories(c *gin.Context) {
 	}
 	defer rows.Close()
 
-	var categories []models.Category
+	categories := make([]models.Category, 0)
 	for rows.Next() {
 		var cat models.Category
 		if err := rows.Scan(&cat.ID, &cat.Name, &cat.Icon, &cat.Color); err != nil {

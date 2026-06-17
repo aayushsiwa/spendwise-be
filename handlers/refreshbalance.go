@@ -3,7 +3,6 @@ package handlers
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -17,22 +16,20 @@ func (h *Handler) RecalculateBalances(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to start transaction"})
 		return
 	}
-	defer func(tx *sql.Tx) {
-		err := tx.Rollback()
+	defer func() {
 		if err != nil {
-			slog.ErrorContext(ctx, "Failed to rollback transaction", err)
+			_ = tx.Rollback()
 		}
-	}(tx)
+	}()
 
 	if err = h.recalculateBalances(ctx, tx); err != nil {
-		appErr := fmt.Errorf("failed to recalculate balances: %w", err)
-		slog.ErrorContext(ctx, "Error in RecalculateBalances: %v", appErr)
+		slog.ErrorContext(ctx, "Failed to recalculate balances", "error", err)
 		c.JSON(500, gin.H{"error": "Internal Server Error"})
 		return
 	}
 
-	if err := tx.Commit(); err != nil {
-		slog.ErrorContext(ctx, "Failed to commit transaction", err)
+	if err = tx.Commit(); err != nil {
+		slog.ErrorContext(ctx, "Failed to commit transaction", "error", err)
 		c.JSON(500, gin.H{"error": "Internal Server Error"})
 		return
 	}
