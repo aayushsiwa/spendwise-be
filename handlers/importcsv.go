@@ -16,25 +16,19 @@ import (
 type recordRow struct {
 	date        interface{}
 	description string
-	categoryID  int
+	categoryID  interface{} // nil or int
 	amount      float64
 	recordType  string
 	note        string
-	balance     float64
 }
 
 func normalize(s string) string {
 	s = strings.ToLower(strings.TrimSpace(s))
 	s = strings.ReplaceAll(s, "_", "")
 	s = strings.ReplaceAll(s, " ", "")
+	s = strings.ReplaceAll(s, "/", "")
+	s = strings.ReplaceAll(s, "-", "")
 	return s
-}
-
-func abs(f float64) float64 {
-	if f < 0 {
-		return -f
-	}
-	return f
 }
 
 func insertBatch(tx *sql.Tx, batch []recordRow) error {
@@ -42,14 +36,14 @@ func insertBatch(tx *sql.Tx, batch []recordRow) error {
 		return nil
 	}
 
-	query := `INSERT INTO records 
-(date, description, category_id, amount, type, note, balance) 
+	query := `INSERT INTO records
+(date, description, category_id, amount, type, note, balance)
 VALUES `
 	args := []interface{}{}
 	values := make([]string, 0, len(batch))
 
 	for _, r := range batch {
-		values = append(values, "(?, ?, ?, ?, ?, ?, ?)")
+		values = append(values, "(?, ?, ?, ?, ?, ?, 0)")
 		args = append(args,
 			r.date,
 			r.description,
@@ -57,7 +51,6 @@ VALUES `
 			r.amount,
 			r.recordType,
 			r.note,
-			0,
 		)
 	}
 
@@ -65,6 +58,18 @@ VALUES `
 
 	_, err := tx.Exec(query, args...)
 	return err
+}
+
+func inferRecordType(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "dr", "debit", "debitcard", "expense", "payment", "withdrawal", "sent", "debit( dr )":
+		return "expense"
+	case "cr", "credit", "creditcard", "income", "deposit", "refund", "received", "credit( cr )":
+		return "income"
+	case "transfer":
+		return "transfer"
+	}
+	return ""
 }
 
 func (h *Handler) ImportCSV(c *gin.Context) {
@@ -99,12 +104,12 @@ func (h *Handler) ImportCSV(c *gin.Context) {
 
 	// ---------- FIELD MAPPING ----------
 	fieldAliases := map[string][]string{
-		"date":        {"date", "transactiondate", "txndate"},
-		"description": {"description", "details", "narration"},
-		"category":    {"category", "type"},
-		"amount":      {"amount", "value", "amt"},
-		"type":        {"type", "transactiontype"},
-		"note":        {"note", "remarks", "comment"},
+		"date":        {"date", "transactiondate", "txndate", "valuedate", "postingdate"},
+		"description": {"description", "details", "narration", "transactiondescription", "transactiondetails", "particulars"},
+		"amount":      {"amount", "value", "amt", "transactionamount", "txnamount"},
+		"type":        {"type", "transactiontype", "drcr", "dr/cr", "debitcredit", "debit/credit"},
+		"note":        {"note", "remarks", "comment", "reference", "chq/refno", "chqrefno"},
+		"category":    {"category", "subcategory", "sub-category"},
 	}
 
 	headerIndex := make(map[string]int)
@@ -147,9 +152,8 @@ func (h *Handler) ImportCSV(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	// ---------- PRELOAD CATEGORIES ----------
+	// ---------- PRELOAD EXISTING CATEGORIES ----------
 	categoryMap := make(map[string]int)
-
 	rows, err := tx.Query(`SELECT id, name FROM categories`)
 	if err == nil {
 		defer rows.Close()
@@ -157,7 +161,7 @@ func (h *Handler) ImportCSV(c *gin.Context) {
 			var id int
 			var name string
 			if err := rows.Scan(&id, &name); err == nil {
-				categoryMap[strings.ToLower(name)] = id
+				categoryMap[strings.ToLower(strings.TrimSpace(name))] = id
 			}
 		}
 	}
@@ -178,10 +182,10 @@ func (h *Handler) ImportCSV(c *gin.Context) {
 
 		dateStr := getValue(record, "date")
 		description := getValue(record, "description")
-		category := strings.ToLower(getValue(record, "category"))
 		amountStr := getValue(record, "amount")
 		recordType := getValue(record, "type")
 		note := getValue(record, "note")
+		category := strings.ToLower(strings.TrimSpace(getValue(record, "category")))
 
 		if dateStr == "" || amountStr == "" {
 			skippedCount++
@@ -200,6 +204,10 @@ func (h *Handler) ImportCSV(c *gin.Context) {
 			continue
 		}
 
+		// Determine type: explicit column, or infer from amount sign
+		if recordType != "" {
+			recordType = inferRecordType(recordType)
+		}
 		if recordType == "" {
 			if amount < 0 {
 				recordType = "expense"
@@ -210,26 +218,18 @@ func (h *Handler) ImportCSV(c *gin.Context) {
 
 		amount = abs(amount)
 
-		if category == "" {
-			category = "uncategorized"
-		}
-
-		categoryID, ok := categoryMap[category]
-		if !ok {
-			res, err := tx.Exec(`INSERT INTO categories (name) VALUES (?)`, category)
-			if err != nil {
-				skippedCount++
-				continue
+		// Match category against existing categories only (no auto-create)
+		var catID interface{}
+		if category != "" {
+			if id, ok := categoryMap[category]; ok {
+				catID = id
 			}
-			lastID, _ := res.LastInsertId()
-			categoryID = int(lastID)
-			categoryMap[category] = categoryID
 		}
 
 		batch = append(batch, recordRow{
 			date:        date,
 			description: description,
-			categoryID:  categoryID,
+			categoryID:  catID,
 			amount:      amount,
 			recordType:  recordType,
 			note:        note,
@@ -273,4 +273,11 @@ func (h *Handler) ImportCSV(c *gin.Context) {
 		"recordsImported": importedCount,
 		"skippedCount":    skippedCount,
 	})
+}
+
+func abs(f float64) float64 {
+	if f < 0 {
+		return -f
+	}
+	return f
 }
