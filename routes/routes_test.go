@@ -112,7 +112,7 @@ func TestAttachRoutes(t *testing.T) {
 		}
 	})
 
-	t.Run("405 wrong method", func(t *testing.T) {
+	t.Run("404 wrong method", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/ping", nil)
 		w := httptest.NewRecorder()
 		engine.ServeHTTP(w, req)

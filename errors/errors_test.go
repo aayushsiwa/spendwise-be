@@ -1,6 +1,7 @@
 package errors
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -235,7 +236,7 @@ func TestHandleError_AppError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+	c.Request = httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 
 	appErr := NewInvalidInput("bad request", errors.New("parse failed"))
 	HandleError(c, appErr)
@@ -264,7 +265,7 @@ func TestHandleError_SqlErrNoRows(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(http.MethodGet, "/api/resource", nil)
+	c.Request = httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/resource", nil)
 
 	HandleError(c, sql.ErrNoRows)
 
@@ -292,7 +293,7 @@ func TestHandleError_PlainError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+	c.Request = httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 
 	HandleError(c, errors.New("something went wrong"))
 
@@ -320,7 +321,7 @@ func TestHandleValidationErrors(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
+	c.Request = httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 
 	ves := ValidationErrors{
 		{Field: "name", Message: "required", Value: ""},
@@ -362,7 +363,7 @@ func TestHandleError_DatabaseError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+	c.Request = httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 
 	HandleError(c, errors.New("sql: table not found"))
 

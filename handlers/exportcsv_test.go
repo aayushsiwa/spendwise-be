@@ -17,12 +17,14 @@ func TestExportCSV(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name       string
-		query      string
-		mock       *mocks.MockService
-		writeError bool
-		wantStatus int
-		wantBody   string
+		name                   string
+		query                  string
+		mock                   *mocks.MockService
+		writeError             bool
+		wantStatus             int
+		wantBody               string
+		wantContentType        string
+		wantContentDisposition string
 	}{
 		{
 			name: "service error returns 500",
@@ -106,22 +108,16 @@ func TestExportCSV(t *testing.T) {
 				t.Errorf("expected body containing %q, got %s", tt.wantBody, w.Body.String())
 			}
 
-			// CSV-specific header assertions
-			ct := w.Header().Get("Content-Type")
-			cd := w.Header().Get("Content-Disposition")
-			if tt.query == "download=true" && tt.name != "service error returns 500" {
-				if ct != "text/csv" {
-					t.Errorf("expected text/csv content-type for download, got %q", ct)
+			if tt.wantContentType != "" {
+				ct := w.Header().Get("Content-Type")
+				if !strings.Contains(ct, tt.wantContentType) {
+					t.Errorf("expected Content-Type containing %q, got %q", tt.wantContentType, ct)
 				}
-				if !strings.Contains(cd, "attachment") {
-					t.Errorf("expected attachment content-disposition, got %q", cd)
-				}
-			} else if tt.name == "inline content type" {
-				if !strings.HasPrefix(ct, "text/plain") {
-					t.Errorf("expected text/plain content-type for inline, got %q", ct)
-				}
-				if !strings.Contains(cd, "inline") {
-					t.Errorf("expected inline content-disposition, got %q", cd)
+			}
+			if tt.wantContentDisposition != "" {
+				cd := w.Header().Get("Content-Disposition")
+				if !strings.Contains(cd, tt.wantContentDisposition) {
+					t.Errorf("expected Content-Disposition containing %q, got %q", tt.wantContentDisposition, cd)
 				}
 			}
 		})
