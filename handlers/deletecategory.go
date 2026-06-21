@@ -22,7 +22,7 @@ func (h *Handler) DeleteCategory(c *gin.Context) {
 
 	// Check if category exists
 	var exists int
-	err := h.DB.QueryRow("SELECT COUNT(*) FROM categories WHERE id = ?", id).Scan(&exists)
+	err := h.DB.QueryRow(`SELECT COUNT(*) FROM categories WHERE "ID" = ?`, id).Scan(&exists)
 	if err != nil {
 		appErr := errors.NewDatabase("Failed to check category existence", err)
 		errors.HandleError(c, appErr)
@@ -55,7 +55,7 @@ func (h *Handler) DeleteCategory(c *gin.Context) {
 		return
 	}
 
-	_, err = h.DB.Exec("DELETE FROM categories WHERE id = ?", id)
+	_, err = h.DB.Exec(`DELETE FROM categories WHERE "ID" = ?`, id)
 	if err != nil {
 		appErr := errors.NewDatabase("Failed to delete category", err)
 		errors.HandleError(c, appErr)

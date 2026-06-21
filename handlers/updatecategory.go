@@ -37,7 +37,7 @@ func (h *Handler) UpdateCategory(c *gin.Context) {
 
 	// Check if category exists
 	var exists int
-	err := h.DB.QueryRow("SELECT COUNT(*) FROM categories WHERE id = ?", id).Scan(&exists)
+	err := h.DB.QueryRow(`SELECT COUNT(*) FROM categories WHERE "ID" = ?`, id).Scan(&exists)
 	if err != nil {
 		appErr := errors.NewDatabase("Failed to check category existence", err)
 		errors.HandleError(c, appErr)
@@ -52,7 +52,7 @@ func (h *Handler) UpdateCategory(c *gin.Context) {
 		return
 	}
 
-	_, err = h.DB.Exec("UPDATE categories SET name = ?, icon = ?, color = ? WHERE id = ?",
+	_, err = h.DB.Exec(`UPDATE categories SET name = ?, icon = ?, color = ? WHERE "ID" = ?`,
 		cat.Name, cat.Icon, cat.Color, id)
 	if err != nil {
 		appErr := errors.NewDatabase("Failed to update category", err)

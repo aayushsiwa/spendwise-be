@@ -2,7 +2,7 @@ package validation
 
 import (
 	"regexp"
-	"strconv"
+	"slices"
 	"strings"
 	"time"
 
@@ -104,8 +104,8 @@ func (v *Validator) ValidateCategory(category *models.Category) errors.Validatio
 	return v.errors
 }
 
-// ValidateRecordID validates a record ID parameter (short UUID string)
-func (v *Validator) ValidateRecordID(idStr string) (string, errors.ValidationErrors) {
+// ValidateID validates a string ID parameter (records, categories, budgets)
+func (v *Validator) ValidateID(idStr string) (string, errors.ValidationErrors) {
 	v.errors = make(errors.ValidationErrors, 0)
 
 	if idStr == "" {
@@ -114,29 +114,6 @@ func (v *Validator) ValidateRecordID(idStr string) (string, errors.ValidationErr
 	}
 
 	return idStr, v.errors
-}
-
-// ValidateID validates an integer ID parameter (for categories/budgets)
-func (v *Validator) ValidateID(idStr string) (int, errors.ValidationErrors) {
-	v.errors = make(errors.ValidationErrors, 0)
-
-	if idStr == "" {
-		v.errors = append(v.errors, errors.NewValidationError("id", "ID is required", idStr))
-		return 0, v.errors
-	}
-
-	id, err := strconv.Atoi(idStr)
-	if err != nil {
-		v.errors = append(v.errors, errors.NewValidationError("id", "ID must be a valid integer", idStr))
-		return 0, v.errors
-	}
-
-	if id <= 0 {
-		v.errors = append(v.errors, errors.NewValidationError("id", "ID must be a positive integer", id))
-		return 0, v.errors
-	}
-
-	return id, v.errors
 }
 
 // Validation helper methods

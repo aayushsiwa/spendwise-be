@@ -106,13 +106,13 @@ func (h *Handler) UpdateSummary() (err error) {
 			r.id,
 			strftime('%Y-%m', r.date) AS month,
 			r.type,
-			COALESCE(c.id, 0) AS "categoryID",
+			COALESCE(c."ID", '') AS "categoryID",
 			COALESCE(c.name, 'uncategorized') AS "categoryName",
 			SUM(r.amount) AS amount
 		FROM records r
-		LEFT JOIN categories c ON r."categoryID" = c.id
+		LEFT JOIN categories c ON r."categoryID" = c."ID"
 		WHERE r.type IN ('income', 'expense', 'transfer')
-		GROUP BY month, r.type, COALESCE(c.id, 0), COALESCE(c.name, 'uncategorized')
+		GROUP BY month, r.type, COALESCE(c."ID", ''), COALESCE(c.name, 'uncategorized')
 	`)
 	if err != nil {
 		return errors.NewDatabase("Failed to insert summary details", err)
@@ -164,7 +164,7 @@ func (h *Handler) GetSummary(c *gin.Context) {
 	typeFilter := c.Query("type")
 
 	detailQuery := `
-		SELECT COALESCE(c.id, 0), COALESCE(c.name, ''), r.type, SUM(r.amount)
+		SELECT COALESCE(c.id, ''), COALESCE(c.name, ''), r.type, SUM(r.amount)
 		FROM records r
 		LEFT JOIN categories c ON r."categoryID" = c.id
 		WHERE r.date >= ? AND r.date <= ?
@@ -196,7 +196,7 @@ func (h *Handler) GetSummary(c *gin.Context) {
 	incomes := make([]models.CategoryDetail, 0)
 	expenses := make([]models.CategoryDetail, 0)
 	for rows.Next() {
-		var categoryID int
+		var categoryID string
 		var categoryName, recType string
 		var amount float64
 		if err := rows.Scan(&categoryID, &categoryName, &recType, &amount); err != nil {

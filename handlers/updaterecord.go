@@ -19,7 +19,7 @@ func (h *Handler) PatchRecord(c *gin.Context) {
 	idStr := c.Param("id")
 
 	validator := validation.NewValidator()
-	id, validationErrs := validator.ValidateRecordID(idStr)
+	id, validationErrs := validator.ValidateID(idStr)
 	if len(validationErrs) > 0 {
 		errors.HandleValidationErrors(c, validationErrs)
 		return
@@ -73,8 +73,8 @@ func (h *Handler) PatchRecord(c *gin.Context) {
 		args = append(args, *req.Note)
 	}
 	if req.Category != nil {
-		var categoryID int
-		err := h.DB.QueryRow("SELECT id FROM categories WHERE name = ?", *req.Category).Scan(&categoryID)
+		var categoryID string
+		err := h.DB.QueryRow(`SELECT "ID" FROM categories WHERE name = ?`, *req.Category).Scan(&categoryID)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				appErr := errors.NewInvalidInput("Category not found", err).WithDetails(map[string]any{

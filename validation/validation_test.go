@@ -107,7 +107,7 @@ func TestValidator_ValidateID(t *testing.T) {
 		name   string
 		fields fields
 		args   args
-		want   int
+		want   string
 		want1  errors.ValidationErrors
 	}{
 		// TODO: Add test cases.

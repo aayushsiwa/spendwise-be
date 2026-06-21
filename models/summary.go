@@ -1,8 +1,8 @@
 package models
 
 type CategoryDetail struct {
-	ID         int     `json:"ID"`
-	CategoryID int     `json:"categoryID"`
+	ID         string  `json:"ID"`
+	CategoryID string  `json:"categoryID"`
 	Category   string  `json:"category"`
 	Amount     float64 `json:"amount"`
 }

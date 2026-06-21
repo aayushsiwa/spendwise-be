@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/lithammer/shortuuid/v4"
 )
 
 func (h *Handler) CreateCategories(c *gin.Context) {
@@ -52,7 +53,7 @@ func (h *Handler) CreateCategories(c *gin.Context) {
 		return
 	}
 
-	stmt, err := tx.Prepare("INSERT INTO categories (name, icon, color) VALUES (?, ?, ?)")
+	stmt, err := tx.Prepare("INSERT INTO categories (id, name, icon, color) VALUES (?, ?, ?, ?)")
 	if err != nil {
 		if rbErr := tx.Rollback(); rbErr != nil {
 			slog.Error("Failed to rollback transaction", "error", rbErr)
@@ -68,8 +69,9 @@ func (h *Handler) CreateCategories(c *gin.Context) {
 		if cat.Name == "" {
 			continue
 		}
+		catID := shortuuid.New()
 		lowerName := strings.ToLower(cat.Name)
-		result, err := stmt.Exec(lowerName, cat.Icon, cat.Color)
+		_, err := stmt.Exec(catID, lowerName, cat.Icon, cat.Color)
 		if err != nil {
 			if rbErr := tx.Rollback(); rbErr != nil {
 				slog.Error("Failed to rollback transaction", "error", rbErr)
@@ -80,9 +82,8 @@ func (h *Handler) CreateCategories(c *gin.Context) {
 			errors.HandleError(c, appErr)
 			return
 		}
-		id, _ := result.LastInsertId()
 		inserted = append(inserted, gin.H{
-			"ID":    id,
+			"ID":    catID,
 			"name":  lowerName,
 			"icon":  cat.Icon,
 			"color": cat.Color,

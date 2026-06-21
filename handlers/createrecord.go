@@ -40,8 +40,8 @@ func (h *Handler) CreateRecord(c *gin.Context) {
 	rec.ID = customId
 
 	// Get category ID
-	var categoryID int
-	err = h.DB.QueryRow("SELECT id FROM categories WHERE name = ?", strings.ToLower(rec.Category)).Scan(&categoryID)
+	var categoryID string
+	err = h.DB.QueryRow(`SELECT "ID" FROM categories WHERE name = ?`, strings.ToLower(rec.Category)).Scan(&categoryID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			appErr := errors.NewInvalidInput("Category not found", err).WithDetails(map[string]any{

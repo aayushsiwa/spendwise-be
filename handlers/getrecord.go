@@ -17,7 +17,7 @@ func (h *Handler) GetRecord(c *gin.Context) {
 
 	// Validate ID parameter
 	validator := validation.NewValidator()
-	id, validationErrs := validator.ValidateRecordID(idStr)
+	id, validationErrs := validator.ValidateID(idStr)
 	if len(validationErrs) > 0 {
 		errors.HandleValidationErrors(c, validationErrs)
 		return

@@ -10,7 +10,7 @@ import (
 )
 
 func (h *Handler) GetCategories(c *gin.Context) {
-	rows, err := h.DB.Query("SELECT id, name, icon, color FROM categories ORDER BY name ASC")
+	rows, err := h.DB.Query(`SELECT "ID", name, icon, color FROM categories ORDER BY name ASC`)
 	if err != nil {
 		appErr := errors.NewDatabase("Failed to fetch categories", err)
 		errors.HandleError(c, appErr)

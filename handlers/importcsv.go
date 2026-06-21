@@ -18,7 +18,7 @@ type recordRow struct {
 	id          string
 	date        any
 	description string
-	categoryID  any // nil or int
+	categoryID  any // nil or string
 	amount      float64
 	recordType  string
 	note        string
@@ -156,12 +156,12 @@ func (h *Handler) ImportCSV(c *gin.Context) {
 	defer func() { _ = tx.Rollback() }()
 
 	// ---------- PRELOAD EXISTING CATEGORIES ----------
-	categoryMap := make(map[string]int)
-	rows, err := tx.Query(`SELECT id, name FROM categories`)
+	categoryMap := make(map[string]string)
+	rows, err := tx.Query(`SELECT "ID", name FROM categories`)
 	if err == nil {
 		defer func() { _ = rows.Close() }()
 		for rows.Next() {
-			var id int
+			var id string
 			var name string
 			if err := rows.Scan(&id, &name); err == nil {
 				categoryMap[strings.ToLower(strings.TrimSpace(name))] = id
