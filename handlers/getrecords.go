@@ -39,7 +39,7 @@ func (h *Handler) GetRecords(c *gin.Context) {
 		LIMIT ? OFFSET ?
 	`
 
-	selectArgs := append(append([]interface{}{}, filterArgs...), queryParams.Limit, offset)
+	selectArgs := append(append([]any{}, filterArgs...), queryParams.Limit, offset)
 
 	slog.Debug("Executing select query", "query", strings.TrimSpace(selectQuery), "args", selectArgs)
 
@@ -50,7 +50,7 @@ func (h *Handler) GetRecords(c *gin.Context) {
 		errors.HandleError(c, appErr)
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	records := make([]models.Record, 0)
 
@@ -128,9 +128,9 @@ func (h *Handler) GetRecords(c *gin.Context) {
 	c.JSON(http.StatusOK, res)
 }
 
-func buildWhereClause(q *models.QueryParams) (string, []interface{}) {
+func buildWhereClause(q *models.QueryParams) (string, []any) {
 	filters := make([]string, 0, 5)
-	args := make([]interface{}, 0, 5)
+	args := make([]any, 0, 5)
 
 	if q.Type != "" {
 		filters = append(filters, "r.type = ?")

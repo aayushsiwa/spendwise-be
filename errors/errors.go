@@ -28,12 +28,12 @@ var (
 
 // AppError represents a structured application error
 type AppError struct {
-	Type       string                 `json:"type"`
-	Message    string                 `json:"message"`
-	Details    map[string]interface{} `json:"details,omitempty"`
-	StatusCode int                    `json:"-"`
-	Err        error                  `json:"-"`
-	Context    map[string]interface{} `json:"-"`
+	Type       string         `json:"type"`
+	Message    string         `json:"message"`
+	Details    map[string]any `json:"details,omitempty"`
+	StatusCode int            `json:"-"`
+	Err        error          `json:"-"`
+	Context    map[string]any `json:"-"`
 }
 
 // Error implements the error interface
@@ -56,18 +56,18 @@ func New(errType string, message string, statusCode int, err error) *AppError {
 		Message:    message,
 		StatusCode: statusCode,
 		Err:        err,
-		Context:    make(map[string]interface{}),
+		Context:    make(map[string]any),
 	}
 }
 
 // WithDetails adds additional details to the error
-func (e *AppError) WithDetails(details map[string]interface{}) *AppError {
+func (e *AppError) WithDetails(details map[string]any) *AppError {
 	e.Details = details
 	return e
 }
 
 // WithContext adds context information for logging
-func (e *AppError) WithContext(key string, value interface{}) {
+func (e *AppError) WithContext(key string, value any) {
 	e.Context[key] = value
 }
 
@@ -107,7 +107,7 @@ func NewEncryption(message string, err error) *AppError {
 	return New("encryption_error", message, http.StatusInternalServerError, err)
 }
 
-func NewValidation(message string, details map[string]interface{}) *AppError {
+func NewValidation(message string, details map[string]any) *AppError {
 	return New("validation_error", message, http.StatusBadRequest, nil).WithDetails(details)
 }
 
@@ -183,9 +183,9 @@ func getHandlerName() string {
 
 // ValidationError represents a validation error with field-specific details
 type ValidationError struct {
-	Field   string      `json:"field"`
-	Message string      `json:"message"`
-	Value   interface{} `json:"value,omitempty"`
+	Field   string `json:"field"`
+	Message string `json:"message"`
+	Value   any    `json:"value,omitempty"`
 }
 
 // ValidationErrors is a collection of validation errors
@@ -205,8 +205,8 @@ func (v ValidationErrors) Error() string {
 }
 
 // ToMap converts validation errors to a map for JSON response
-func (v ValidationErrors) ToMap() map[string]interface{} {
-	details := make(map[string]interface{})
+func (v ValidationErrors) ToMap() map[string]any {
+	details := make(map[string]any)
 	for _, err := range v {
 		details[err.Field] = gin.H{
 			"message": err.Message,
@@ -217,7 +217,7 @@ func (v ValidationErrors) ToMap() map[string]interface{} {
 }
 
 // NewValidationError creates a new validation error
-func NewValidationError(field, message string, value interface{}) ValidationError {
+func NewValidationError(field, message string, value any) ValidationError {
 	return ValidationError{
 		Field:   field,
 		Message: message,

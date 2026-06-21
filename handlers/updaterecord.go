@@ -79,9 +79,13 @@ func (h *Handler) PatchRecord(c *gin.Context) {
 	} else {
 		if err := h.recalculateBalances(ctx, tx); err != nil {
 			slog.Warn("Failed to recalculate balances after record update", "record_id", id, "error", err)
-			tx.Rollback()
+			if rbErr := tx.Rollback(); rbErr != nil {
+				slog.Error("Failed to rollback transaction", "error", rbErr)
+			}
 		} else {
-			tx.Commit()
+			if cErr := tx.Commit(); cErr != nil {
+				slog.Error("Failed to commit transaction", "error", cErr)
+			}
 		}
 	}
 

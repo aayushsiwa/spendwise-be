@@ -45,7 +45,7 @@ func (h *Handler) UpdateCategory(c *gin.Context) {
 	}
 
 	if exists == 0 {
-		appErr := errors.NewNotFound("Category not found", nil).WithDetails(map[string]interface{}{
+		appErr := errors.NewNotFound("Category not found", nil).WithDetails(map[string]any{
 			"categoryID": id,
 		})
 		errors.HandleError(c, appErr)

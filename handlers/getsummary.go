@@ -63,7 +63,7 @@ func (h *Handler) UpdateSummary() (err error) {
 	if err != nil {
 		return errors.NewDatabase("Failed to aggregate records", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	type monthData struct {
 		income  float64
@@ -169,7 +169,7 @@ func (h *Handler) GetSummary(c *gin.Context) {
 		LEFT JOIN categories c ON r."categoryID" = c.id
 		WHERE r.date >= ? AND r.date <= ?
 	`
-	detailArgs := []interface{}{from, to}
+	detailArgs := []any{from, to}
 
 	var conditions []string
 	if categoryFilter != "" {
@@ -191,7 +191,7 @@ func (h *Handler) GetSummary(c *gin.Context) {
 		errors.HandleError(c, errors.NewDatabase("Failed to fetch category breakdown", err))
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	incomes := make([]models.CategoryDetail, 0)
 	expenses := make([]models.CategoryDetail, 0)
@@ -204,9 +204,10 @@ func (h *Handler) GetSummary(c *gin.Context) {
 			return
 		}
 		cd := models.CategoryDetail{CategoryID: categoryID, Category: categoryName, Amount: amount}
-		if recType == "income" {
+		switch recType {
+		case "income":
 			incomes = append(incomes, cd)
-		} else if recType == "expense" {
+		case "expense":
 			expenses = append(expenses, cd)
 		}
 	}

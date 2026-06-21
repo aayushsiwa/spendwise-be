@@ -44,7 +44,7 @@ func (h *Handler) CreateRecord(c *gin.Context) {
 	err = h.DB.QueryRow("SELECT id FROM categories WHERE name = ?", strings.ToLower(rec.Category)).Scan(&categoryID)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			appErr := errors.NewInvalidInput("Category not found", err).WithDetails(map[string]interface{}{
+			appErr := errors.NewInvalidInput("Category not found", err).WithDetails(map[string]any{
 				"category": rec.Category,
 			})
 			errors.HandleError(c, appErr)
@@ -62,9 +62,10 @@ func (h *Handler) CreateRecord(c *gin.Context) {
 		currentBalance = 0
 	}
 
-	if rec.Type == "income" {
+	switch rec.Type {
+	case "income":
 		currentBalance += rec.Amount
-	} else if rec.Type == "expense" {
+	case "expense":
 		currentBalance -= rec.Amount
 	}
 

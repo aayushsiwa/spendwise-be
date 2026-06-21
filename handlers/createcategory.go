@@ -61,7 +61,7 @@ func (h *Handler) CreateCategories(c *gin.Context) {
 		errors.HandleError(c, appErr)
 		return
 	}
-	defer stmt.Close()
+	defer func() { _ = stmt.Close() }()
 
 	var inserted []gin.H
 	for _, cat := range categories {
@@ -74,7 +74,7 @@ func (h *Handler) CreateCategories(c *gin.Context) {
 			if rbErr := tx.Rollback(); rbErr != nil {
 				slog.Error("Failed to rollback transaction", "error", rbErr)
 			}
-			appErr := errors.NewDatabase("Failed to insert category", err).WithDetails(map[string]interface{}{
+			appErr := errors.NewDatabase("Failed to insert category", err).WithDetails(map[string]any{
 				"categoryName": cat.Name,
 			})
 			errors.HandleError(c, appErr)

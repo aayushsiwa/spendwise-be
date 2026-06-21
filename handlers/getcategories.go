@@ -16,7 +16,7 @@ func (h *Handler) GetCategories(c *gin.Context) {
 		errors.HandleError(c, appErr)
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	categories := make([]models.Category, 0)
 	for rows.Next() {

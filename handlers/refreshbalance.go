@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -65,25 +66,26 @@ func (h *Handler) recalculateBalances(ctx context.Context, tx *sql.Tx) error {
 			return nil
 		}
 
-		query := "UPDATE records SET balance = CASE id "
-		var args []interface{}
+		var query strings.Builder
+		query.WriteString("UPDATE records SET balance = CASE id ")
+		var args []any
 
 		for i := range ids {
-			query += "WHEN ? THEN ? "
+			query.WriteString("WHEN ? THEN ? ")
 			args = append(args, ids[i], balances[i])
 		}
 
-		query += "END WHERE id IN ("
+		query.WriteString("END WHERE id IN (")
 		for i := range ids {
 			if i > 0 {
-				query += ","
+				query.WriteString(",")
 			}
-			query += "?"
+			query.WriteString("?")
 			args = append(args, ids[i])
 		}
-		query += ")"
+		query.WriteString(")")
 
-		_, err := tx.Exec(query, args...)
+		_, err := tx.Exec(query.String(), args...)
 		return err
 	}
 

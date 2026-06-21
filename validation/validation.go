@@ -133,10 +133,8 @@ func (v *Validator) positiveNumber(field string, value float64, message string) 
 }
 
 func (v *Validator) enum(field, value string, allowed []string, message string) {
-	for _, allowedValue := range allowed {
-		if value == allowedValue {
-			return
-		}
+	if slices.Contains(allowed, value) {
+		return
 	}
 	v.errors = append(v.errors, errors.NewValidationError(field, message, value))
 }

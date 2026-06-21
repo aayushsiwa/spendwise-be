@@ -11,10 +11,10 @@ func TestAppError_Error(t *testing.T) {
 	type fields struct {
 		Type       string
 		Message    string
-		Details    map[string]interface{}
+		Details    map[string]any
 		StatusCode int
 		Err        error
-		Context    map[string]interface{}
+		Context    map[string]any
 	}
 	tests := []struct {
 		name   string
@@ -44,10 +44,10 @@ func TestAppError_Log(t *testing.T) {
 	type fields struct {
 		Type       string
 		Message    string
-		Details    map[string]interface{}
+		Details    map[string]any
 		StatusCode int
 		Err        error
-		Context    map[string]interface{}
+		Context    map[string]any
 	}
 	tests := []struct {
 		name   string
@@ -74,10 +74,10 @@ func TestAppError_Unwrap(t *testing.T) {
 	type fields struct {
 		Type       string
 		Message    string
-		Details    map[string]interface{}
+		Details    map[string]any
 		StatusCode int
 		Err        error
-		Context    map[string]interface{}
+		Context    map[string]any
 	}
 	tests := []struct {
 		name    string
@@ -107,14 +107,14 @@ func TestAppError_WithContext(t *testing.T) {
 	type fields struct {
 		Type       string
 		Message    string
-		Details    map[string]interface{}
+		Details    map[string]any
 		StatusCode int
 		Err        error
-		Context    map[string]interface{}
+		Context    map[string]any
 	}
 	type args struct {
 		key   string
-		value interface{}
+		value any
 	}
 	tests := []struct {
 		name   string
@@ -142,13 +142,13 @@ func TestAppError_WithDetails(t *testing.T) {
 	type fields struct {
 		Type       string
 		Message    string
-		Details    map[string]interface{}
+		Details    map[string]any
 		StatusCode int
 		Err        error
-		Context    map[string]interface{}
+		Context    map[string]any
 	}
 	type args struct {
-		details map[string]interface{}
+		details map[string]any
 	}
 	tests := []struct {
 		name   string
@@ -405,7 +405,7 @@ func TestNewUnauthorized(t *testing.T) {
 func TestNewValidation(t *testing.T) {
 	type args struct {
 		message string
-		details map[string]interface{}
+		details map[string]any
 	}
 	tests := []struct {
 		name string
@@ -427,7 +427,7 @@ func TestNewValidationError(t *testing.T) {
 	type args struct {
 		field   string
 		message string
-		value   interface{}
+		value   any
 	}
 	tests := []struct {
 		name string
@@ -466,7 +466,7 @@ func TestValidationErrors_ToMap(t *testing.T) {
 	tests := []struct {
 		name string
 		v    ValidationErrors
-		want map[string]interface{}
+		want map[string]any
 	}{
 		// TODO: Add test cases.
 	}

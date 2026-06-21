@@ -30,7 +30,7 @@ func (h *Handler) DeleteCategory(c *gin.Context) {
 	}
 
 	if exists == 0 {
-		appErr := errors.NewNotFound("Category not found", nil).WithDetails(map[string]interface{}{
+		appErr := errors.NewNotFound("Category not found", nil).WithDetails(map[string]any{
 			"categoryID": id,
 		})
 		errors.HandleError(c, appErr)
@@ -47,7 +47,7 @@ func (h *Handler) DeleteCategory(c *gin.Context) {
 	}
 
 	if recordCount > 0 {
-		appErr := errors.NewConflict("Cannot delete category that has associated records", nil).WithDetails(map[string]interface{}{
+		appErr := errors.NewConflict("Cannot delete category that has associated records", nil).WithDetails(map[string]any{
 			"categoryID":  id,
 			"recordCount": recordCount,
 		})

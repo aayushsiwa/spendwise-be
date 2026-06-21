@@ -16,9 +16,9 @@ import (
 
 type recordRow struct {
 	id          string
-	date        interface{}
+	date        any
 	description string
-	categoryID  interface{} // nil or int
+	categoryID  any // nil or int
 	amount      float64
 	recordType  string
 	note        string
@@ -41,7 +41,7 @@ func insertBatch(tx *sql.Tx, batch []recordRow) error {
 	query := `INSERT INTO records
 (id, date, description, "categoryID", amount, type, note, balance)
 VALUES `
-	args := []interface{}{}
+	args := []any{}
 	values := make([]string, 0, len(batch))
 
 	for _, r := range batch {
@@ -93,7 +93,7 @@ func (h *Handler) ImportCSV(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to open uploaded file"})
 		return
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	reader := csv.NewReader(file)
 	reader.TrimLeadingSpace = true
@@ -153,13 +153,13 @@ func (h *Handler) ImportCSV(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to start transaction"})
 		return
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// ---------- PRELOAD EXISTING CATEGORIES ----------
 	categoryMap := make(map[string]int)
 	rows, err := tx.Query(`SELECT id, name FROM categories`)
 	if err == nil {
-		defer rows.Close()
+		defer func() { _ = rows.Close() }()
 		for rows.Next() {
 			var id int
 			var name string
@@ -222,7 +222,7 @@ func (h *Handler) ImportCSV(c *gin.Context) {
 		amount = abs(amount)
 
 		// Match category against existing categories only (no auto-create)
-		var catID interface{}
+		var catID any
 		if category != "" {
 			if id, ok := categoryMap[category]; ok {
 				catID = id

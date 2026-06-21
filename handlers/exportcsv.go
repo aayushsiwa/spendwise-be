@@ -21,7 +21,7 @@ func (h *Handler) ExportCSV(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "Error querying records")
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	if download {
 		c.Header("Content-Type", "text/csv")

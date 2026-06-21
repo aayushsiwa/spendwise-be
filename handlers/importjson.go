@@ -27,7 +27,9 @@ func (h *Handler) ImportJSON(c *gin.Context) {
 	}
 	defer func() {
 		if err != nil {
-			tx.Rollback()
+			if rbErr := tx.Rollback(); rbErr != nil {
+				slog.Error("Failed to rollback transaction", "error", rbErr)
+			}
 		}
 	}()
 
@@ -64,9 +66,10 @@ func (h *Handler) ImportJSON(c *gin.Context) {
 			currentBalance = 0
 		}
 
-		if rec.Type == "income" {
+		switch rec.Type {
+		case "income":
 			currentBalance += rec.Amount
-		} else if rec.Type == "expense" {
+		case "expense":
 			currentBalance -= rec.Amount
 		}
 
