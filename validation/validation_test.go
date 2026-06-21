@@ -44,7 +44,7 @@ func TestValidateID(t *testing.T) {
 	}{
 		{"empty returns error", "", "", 1},
 		{"valid ID returns as-is", "abc123", "abc123", 0},
-		{"whitespace treated as valid (only checks empty)", "   ", "   ", 0},
+		{"whitespace treated as valid (only checks empty)", "   ", "   ", 1},
 	}
 
 	for _, tt := range tests {

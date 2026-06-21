@@ -124,6 +124,7 @@ coverage-html: ## Generate HTML coverage report
 	fi
 
 coverage-check: ## Fail if coverage is below threshold
+	@mkdir -p tmp
 	@go test -coverprofile=tmp/coverage.out -covermode=count ./...
 	@coverage=$$(go tool cover -func=tmp/coverage.out | awk '/total:/ {sub("%","",$$3); print $$3}'); \
 	if awk 'BEGIN { exit !('"$$coverage"' < $(MIN_COVERAGE)) }'; then \

@@ -38,8 +38,14 @@ func TestGenerateCustomID(t *testing.T) {
 			name: "returns unique IDs",
 			date: "2024-01-01",
 			check: func(t *testing.T, got string, err error) {
+				if err != nil {
+					t.Errorf("expected no error, got %v", err)
+				}
 				h := &Handler{Service: &mocks.MockService{}}
-				id2, _ := h.GenerateCustomID("2024-01-01")
+				id2, err2 := h.GenerateCustomID("2024-01-01")
+				if err2 != nil {
+					t.Errorf("expected no error on second call, got %v", err2)
+				}
 				if got == id2 {
 					t.Error("GenerateCustomID should return unique IDs on successive calls")
 				}
@@ -65,6 +71,9 @@ func TestGenerateCustomID(t *testing.T) {
 			name: "ID contains only alphanumeric",
 			date: "2024-01-15",
 			check: func(t *testing.T, got string, err error) {
+				if err != nil {
+					t.Errorf("expected no error, got %v", err)
+				}
 				const alphabet = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ123456789"
 				for _, ch := range got {
 					if !strings.ContainsRune(alphabet, ch) {

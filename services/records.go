@@ -87,7 +87,7 @@ func BuildWhereClause(q *models.QueryParams) (string, []any) {
 	}
 	if q.Category != "" {
 		filters = append(filters, "c.name = ?")
-		args = append(args, q.Category)
+		args = append(args, strings.ToLower(q.Category))
 	}
 	if q.From != "" {
 		filters = append(filters, "r.date >= ?")
@@ -241,7 +241,7 @@ func (s *RecordService) PatchRecord(ctx context.Context, id string, req *models.
 	}
 	if req.Category != nil {
 		var categoryID string
-		err := s.db.QueryRowContext(ctx, `SELECT "ID" FROM categories WHERE name = ?`, *req.Category).Scan(&categoryID)
+		err := s.db.QueryRowContext(ctx, `SELECT "ID" FROM categories WHERE name = ?`, strings.ToLower(*req.Category)).Scan(&categoryID)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				return errors.NewInvalidInput("Category not found", err).WithDetails(map[string]any{
