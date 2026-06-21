@@ -1,11 +1,11 @@
 package handlers
 
-import "database/sql"
+import "aayushsiwa/expense-tracker/services"
 
 type Handler struct {
-	DB *sql.DB
+	Service services.Service
 }
 
-func NewHandler(db *sql.DB) *Handler {
-	return &Handler{DB: db}
+func NewHandler(s services.Service) *Handler {
+	return &Handler{Service: s}
 }

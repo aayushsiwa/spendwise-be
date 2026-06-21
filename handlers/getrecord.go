@@ -1,13 +1,11 @@
 package handlers
 
 import (
-	"aayushsiwa/expense-tracker/errors"
-	"aayushsiwa/expense-tracker/models"
-	"aayushsiwa/expense-tracker/validation"
-	"database/sql"
-	"fmt"
 	"log/slog"
 	"net/http"
+
+	"aayushsiwa/expense-tracker/errors"
+	"aayushsiwa/expense-tracker/validation"
 
 	"github.com/gin-gonic/gin"
 )
@@ -15,7 +13,6 @@ import (
 func (h *Handler) GetRecord(c *gin.Context) {
 	idStr := c.Param("id")
 
-	// Validate ID parameter
 	validator := validation.NewValidator()
 	id, validationErrs := validator.ValidateID(idStr)
 	if len(validationErrs) > 0 {
@@ -23,22 +20,9 @@ func (h *Handler) GetRecord(c *gin.Context) {
 		return
 	}
 
-	row := h.DB.QueryRow(`
-		SELECT r.id, r.date, r.description, COALESCE(c.name, '') as category, r.amount, r.type, r.note, r.balance
-		FROM records r
-		LEFT JOIN categories c ON r."categoryID" = c.id
-		WHERE r.id = ?
-	`, id)
-
-	var rec models.Record
-	if err := row.Scan(&rec.ID, &rec.Date, &rec.Description, &rec.Category, &rec.Amount, &rec.Type, &rec.Note, &rec.Balance); err != nil {
-		if err == sql.ErrNoRows {
-			appErr := errors.NewNotFound(fmt.Sprintf("Record with ID %s not found", id), err)
-			errors.HandleError(c, appErr)
-		} else {
-			appErr := errors.NewDatabase("Failed to read record", err)
-			errors.HandleError(c, appErr)
-		}
+	rec, err := h.Service.GetRecord(c.Request.Context(), id)
+	if err != nil {
+		errors.HandleError(c, err)
 		return
 	}
 

@@ -11,12 +11,7 @@ import (
 func (h *Handler) ExportCSV(c *gin.Context) {
 	download := c.Query("download") == "true"
 
-	rows, err := h.DB.Query(`
-		SELECT r.date, r.description, COALESCE(c.name, ''), r.amount, r.type, r.note
-		FROM records r
-		LEFT JOIN categories c ON r."categoryID" = c.id
-		ORDER BY r.date DESC
-	`)
+	rows, err := h.Service.ExportRecords(c.Request.Context())
 	if err != nil {
 		c.String(http.StatusInternalServerError, "Error querying records")
 		return

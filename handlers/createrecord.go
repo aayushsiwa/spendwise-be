@@ -1,14 +1,12 @@
 package handlers
 
 import (
+	"log/slog"
+	"net/http"
+
 	"aayushsiwa/expense-tracker/errors"
 	"aayushsiwa/expense-tracker/models"
 	"aayushsiwa/expense-tracker/validation"
-	"database/sql"
-	"fmt"
-	"log/slog"
-	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -21,7 +19,6 @@ func (h *Handler) CreateRecord(c *gin.Context) {
 		return
 	}
 
-	// Validate record data
 	validator := validation.NewValidator()
 	validationErrs := validator.ValidateRecord(&rec)
 	if len(validationErrs) > 0 {
@@ -29,7 +26,6 @@ func (h *Handler) CreateRecord(c *gin.Context) {
 		return
 	}
 
-	// Generate custom ID
 	customId, err := h.GenerateCustomID(rec.Date)
 	if err != nil {
 		appErr := errors.NewInternal("Failed to generate record ID", err)
@@ -39,55 +35,14 @@ func (h *Handler) CreateRecord(c *gin.Context) {
 
 	rec.ID = customId
 
-	// Get category ID
-	var categoryID string
-	err = h.DB.QueryRow(`SELECT "ID" FROM categories WHERE name = ?`, strings.ToLower(rec.Category)).Scan(&categoryID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			appErr := errors.NewInvalidInput("Category not found", err).WithDetails(map[string]any{
-				"category": rec.Category,
-			})
-			errors.HandleError(c, appErr)
-		} else {
-			appErr := errors.NewDatabase("Failed to find category", err)
-			errors.HandleError(c, appErr)
-		}
+	if err := h.Service.CreateRecord(c.Request.Context(), &rec); err != nil {
+		errors.HandleError(c, err)
 		return
-	}
-
-	// Compute running balance from actual records
-	var currentBalance float64
-	err = h.DB.QueryRow("SELECT COALESCE(balance, 0) FROM records ORDER BY date DESC, id DESC LIMIT 1").Scan(&currentBalance)
-	if err != nil {
-		currentBalance = 0
-	}
-
-	switch rec.Type {
-	case "income":
-		currentBalance += rec.Amount
-	case "expense":
-		currentBalance -= rec.Amount
-	}
-
-	// Insert record
-	_, err = h.DB.Exec(`
-		INSERT INTO records (id, date, description, "categoryID", amount, type, note, balance)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		rec.ID, rec.Date, rec.Description, categoryID, rec.Amount, rec.Type, rec.Note, currentBalance)
-	if err != nil {
-		appErr := errors.NewDatabase("Failed to insert record", err)
-		errors.HandleError(c, appErr)
-		return
-	}
-
-	// Update summary
-	if err := h.UpdateSummary(); err != nil {
-		slog.Warn("Failed to update summary after record creation", "record_id", rec.ID, "error", err)
 	}
 
 	slog.Info("Record created successfully", "record_id", rec.ID)
 	c.JSON(http.StatusCreated, gin.H{
-		"message": fmt.Sprintf("Record with id %s created successfully", rec.ID),
+		"message": "Record with id " + rec.ID + " created successfully",
 		"ID":      rec.ID,
 	})
 }
