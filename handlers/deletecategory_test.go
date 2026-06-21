@@ -1,127 +1,81 @@
 package handlers
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	apperrors "aayushsiwa/expense-tracker/errors"
-	"aayushsiwa/expense-tracker/services"
+	"aayushsiwa/expense-tracker/mocks"
 
 	"github.com/gin-gonic/gin"
 )
 
-func TestHandler_DeleteCategory(t *testing.T) {
-	type fields struct {
-		Service services.Service
-	}
-	type args struct {
-		c *gin.Context
-	}
+func TestDeleteCategory(t *testing.T) {
 	tests := []struct {
-		name   string
-		fields fields
-		args   args
+		name       string
+		id         string
+		mock       *mocks.MockService
+		wantStatus int
+		wantBody   string
 	}{
-		// TODO: Add test cases.
+		{
+			name:       "EmptyID",
+			id:         "",
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name: "NotFound",
+			id:   "abc123",
+			mock: &mocks.MockService{
+				DeleteCategoryErr: apperrors.NewNotFound("Category not found", nil),
+			},
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			name: "Conflict",
+			id:   "abc123",
+			mock: &mocks.MockService{
+				DeleteCategoryErr: apperrors.NewConflict("Cannot delete category that has associated records", nil),
+			},
+			wantStatus: http.StatusConflict,
+		},
+		{
+			name: "DatabaseError",
+			id:   "abc123",
+			mock: &mocks.MockService{
+				DeleteCategoryErr: apperrors.NewDatabase("Failed to delete category", nil),
+			},
+			wantStatus: http.StatusInternalServerError,
+		},
+		{
+			name:       "Success",
+			id:         "abc123",
+			wantStatus: http.StatusNoContent,
+		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := &Handler{
-				Service: tt.fields.Service,
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = httptest.NewRequest(http.MethodDelete, "/categories/"+tt.id, nil)
+			c.Params = gin.Params{{Key: "id", Value: tt.id}}
+
+			svc := tt.mock
+			if svc == nil {
+				svc = &mocks.MockService{}
 			}
-			h.DeleteCategory(tt.args.c)
+			h := &Handler{Service: svc}
+			h.DeleteCategory(c)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("status = %d, want %d", w.Code, tt.wantStatus)
+			}
+			if tt.wantBody != "" && !strings.Contains(w.Body.String(), tt.wantBody) {
+				t.Errorf("expected body containing %q, got %s", tt.wantBody, w.Body.String())
+			}
 		})
-	}
-}
-
-func TestDeleteCategory_EmptyID(t *testing.T) {
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(http.MethodDelete, "/categories/", nil)
-	c.Params = gin.Params{{Key: "id", Value: ""}}
-
-	h := &Handler{Service: &mockService{}}
-	h.DeleteCategory(c)
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400 for empty ID, got %d", w.Code)
-	}
-}
-
-func TestDeleteCategory_NotFound(t *testing.T) {
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(http.MethodDelete, "/categories/abc123", nil)
-	c.Params = gin.Params{{Key: "id", Value: "abc123"}}
-
-	svc := &mockService{
-		deleteCategoryFn: func(_ context.Context, id string) error {
-			return apperrors.NewNotFound("Category not found", nil)
-		},
-	}
-	h := &Handler{Service: svc}
-	h.DeleteCategory(c)
-
-	if w.Code != http.StatusNotFound {
-		t.Errorf("expected 404, got %d", w.Code)
-	}
-}
-
-func TestDeleteCategory_Conflict(t *testing.T) {
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(http.MethodDelete, "/categories/abc123", nil)
-	c.Params = gin.Params{{Key: "id", Value: "abc123"}}
-
-	svc := &mockService{
-		deleteCategoryFn: func(_ context.Context, id string) error {
-			return apperrors.NewConflict("Cannot delete category that has associated records", nil)
-		},
-	}
-	h := &Handler{Service: svc}
-	h.DeleteCategory(c)
-
-	if w.Code != http.StatusConflict {
-		t.Errorf("expected 409, got %d", w.Code)
-	}
-}
-
-func TestDeleteCategory_DatabaseError(t *testing.T) {
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(http.MethodDelete, "/categories/abc123", nil)
-	c.Params = gin.Params{{Key: "id", Value: "abc123"}}
-
-	svc := &mockService{
-		deleteCategoryFn: func(_ context.Context, id string) error {
-			return apperrors.NewDatabase("Failed to delete category", nil)
-		},
-	}
-	h := &Handler{Service: svc}
-	h.DeleteCategory(c)
-
-	if w.Code != http.StatusInternalServerError {
-		t.Errorf("expected 500, got %d", w.Code)
-	}
-}
-
-func TestDeleteCategory_Success(t *testing.T) {
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(http.MethodDelete, "/categories/abc123", nil)
-	c.Params = gin.Params{{Key: "id", Value: "abc123"}}
-
-	svc := &mockService{
-		deleteCategoryFn: func(_ context.Context, id string) error {
-			return nil
-		},
-	}
-	h := &Handler{Service: svc}
-	h.DeleteCategory(c)
-
-	if w.Code != http.StatusNoContent {
-		t.Errorf("expected 204, got %d", w.Code)
 	}
 }

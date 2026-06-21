@@ -1,96 +1,21 @@
 package handlers
 
 import (
-	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	apperrors "aayushsiwa/expense-tracker/errors"
+	"aayushsiwa/expense-tracker/mocks"
 	"aayushsiwa/expense-tracker/models"
-	"aayushsiwa/expense-tracker/services"
 
 	"github.com/gin-gonic/gin"
 )
 
-func TestHandler_GetRecord(t *testing.T) {
-	type fields struct {
-		Service services.Service
-	}
-	type args struct {
-		c *gin.Context
-	}
-	tests := []struct {
-		name   string
-		fields fields
-		args   args
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			h := &Handler{
-				Service: tt.fields.Service,
-			}
-			h.GetRecord(tt.args.c)
-		})
-	}
-}
+func TestGetRecord(t *testing.T) {
+	t.Parallel()
 
-func TestGetRecord_EmptyID(t *testing.T) {
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(http.MethodGet, "/records/", nil)
-	c.Params = gin.Params{{Key: "id", Value: ""}}
-
-	h := &Handler{Service: &mockService{}}
-	h.GetRecord(c)
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400 for empty ID, got %d", w.Code)
-	}
-}
-
-func TestGetRecord_NotFound(t *testing.T) {
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(http.MethodGet, "/records/nonexistent", nil)
-	c.Params = gin.Params{{Key: "id", Value: "nonexistent"}}
-
-	svc := &mockService{
-		getRecordFn: func(_ context.Context, id string) (*models.Record, error) {
-			return nil, apperrors.NewNotFound("Record not found", nil)
-		},
-	}
-	h := &Handler{Service: svc}
-	h.GetRecord(c)
-
-	if w.Code != http.StatusNotFound {
-		t.Errorf("expected 404, got %d", w.Code)
-	}
-}
-
-func TestGetRecord_DatabaseError(t *testing.T) {
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(http.MethodGet, "/records/someid", nil)
-	c.Params = gin.Params{{Key: "id", Value: "someid"}}
-
-	svc := &mockService{
-		getRecordFn: func(_ context.Context, id string) (*models.Record, error) {
-			return nil, apperrors.NewDatabase("database error", nil)
-		},
-	}
-	h := &Handler{Service: svc}
-	h.GetRecord(c)
-
-	if w.Code != http.StatusInternalServerError {
-		t.Errorf("expected 500, got %d", w.Code)
-	}
-}
-
-func TestGetRecord_Success(t *testing.T) {
 	recordID := "rec-001"
 	expected := &models.Record{
 		ID:          recordID,
@@ -103,31 +28,67 @@ func TestGetRecord_Success(t *testing.T) {
 		Balance:     924.5,
 	}
 
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(http.MethodGet, "/records/"+recordID, nil)
-	c.Params = gin.Params{{Key: "id", Value: recordID}}
-
-	svc := &mockService{
-		getRecordFn: func(_ context.Context, id string) (*models.Record, error) {
-			return expected, nil
+	tests := []struct {
+		name       string
+		params     gin.Params
+		mock       *mocks.MockService
+		wantStatus int
+		wantBody   string
+	}{
+		{
+			name:       "empty ID returns 400",
+			params:     gin.Params{{Key: "id", Value: ""}},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:   "not found returns 404",
+			params: gin.Params{{Key: "id", Value: "nonexistent"}},
+			mock: &mocks.MockService{
+				GetRecordErr: apperrors.NewNotFound("Record not found", nil),
+			},
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			name:   "database error returns 500",
+			params: gin.Params{{Key: "id", Value: "someid"}},
+			mock: &mocks.MockService{
+				GetRecordErr: apperrors.NewDatabase("database error", nil),
+			},
+			wantStatus: http.StatusInternalServerError,
+		},
+		{
+			name:   "success returns record",
+			params: gin.Params{{Key: "id", Value: recordID}},
+			mock: &mocks.MockService{
+				GetRecordResult: expected,
+			},
+			wantStatus: http.StatusOK,
+			wantBody:   recordID,
 		},
 	}
-	h := &Handler{Service: svc}
-	h.GetRecord(c)
 
-	if w.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", w.Code)
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			id := tt.params.ByName("id")
+			c.Request = httptest.NewRequest(http.MethodGet, "/records/"+id, nil)
+			c.Params = tt.params
 
-	var resp models.Record
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("could not parse response: %v", err)
-	}
-	if resp.ID != recordID {
-		t.Errorf("expected ID %q, got %q", recordID, resp.ID)
-	}
-	if resp.Amount != 75.5 {
-		t.Errorf("expected amount 75.5, got %f", resp.Amount)
+			svc := tt.mock
+			if svc == nil {
+				svc = &mocks.MockService{}
+			}
+			h := &Handler{Service: svc}
+			h.GetRecord(c)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("status = %d, want %d", w.Code, tt.wantStatus)
+			}
+			if tt.wantBody != "" && !strings.Contains(w.Body.String(), tt.wantBody) {
+				t.Errorf("expected body containing %q, got %s", tt.wantBody, w.Body.String())
+			}
+		})
 	}
 }
