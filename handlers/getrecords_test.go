@@ -57,15 +57,15 @@ func Test_buildWhereClause(t *testing.T) {
 			want1: []any{},
 		},
 		{
-			name: "type filter",
-			args: args{q: &models.QueryParams{Type: "income"}},
-			want: " WHERE r.type = ?",
+			name:  "type filter",
+			args:  args{q: &models.QueryParams{Type: "income"}},
+			want:  " WHERE r.type = ?",
 			want1: []any{models.RecordType("income")},
 		},
 		{
-			name: "category filter",
-			args: args{q: &models.QueryParams{Category: "food"}},
-			want: " WHERE c.name = ?",
+			name:  "category filter",
+			args:  args{q: &models.QueryParams{Category: "food"}},
+			want:  " WHERE c.name = ?",
 			want1: []any{"food"},
 		},
 		{
@@ -79,15 +79,15 @@ func Test_buildWhereClause(t *testing.T) {
 			want1: []any{"2024-01-01", "2024-12-31"},
 		},
 		{
-			name: "min and max amount",
-			args: args{q: &models.QueryParams{MinAmount: 10.0, MaxAmount: 100.0}},
-			want: " WHERE r.amount >= ? AND r.amount <= ?",
+			name:  "min and max amount",
+			args:  args{q: &models.QueryParams{MinAmount: 10.0, MaxAmount: 100.0}},
+			want:  " WHERE r.amount >= ? AND r.amount <= ?",
 			want1: []any{10.0, 100.0},
 		},
 		{
-			name: "search term is lowercased and wrapped in wildcards",
-			args: args{q: &models.QueryParams{Search: "Grocery"}},
-			want: " WHERE LOWER(r.description) LIKE ?",
+			name:  "search term is lowercased and wrapped in wildcards",
+			args:  args{q: &models.QueryParams{Search: "Grocery"}},
+			want:  " WHERE LOWER(r.description) LIKE ?",
 			want1: []any{"%grocery%"},
 		},
 		{
