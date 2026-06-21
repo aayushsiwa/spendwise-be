@@ -6,6 +6,7 @@ require (
 	github.com/gin-contrib/cors v1.7.6
 	github.com/gin-gonic/gin v1.12.0
 	github.com/joho/godotenv v1.5.1
+	github.com/lithammer/shortuuid/v4 v4.2.0
 	modernc.org/sqlite v1.47.0
 )
 
