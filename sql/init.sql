@@ -27,10 +27,10 @@ CREATE TABLE IF NOT EXISTS summary (
 );
 
 CREATE TABLE IF NOT EXISTS summary_details (
-  "ID" TEXT PRIMARY KEY REFERENCES records("ID"),
   month TEXT NOT NULL,  -- format: YYYY-MM
-  type TEXT NOT NULL CHECK (type IN ('income', 'expense','transfer')),
+  type TEXT NOT NULL CHECK (type IN ('income', 'expense', 'transfer')),
   "categoryID" TEXT NOT NULL,
   "categoryName" TEXT NOT NULL,
-  amount REAL NOT NULL
+  amount REAL NOT NULL,
+  PRIMARY KEY (month, type, "categoryID")
 );

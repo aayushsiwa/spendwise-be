@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"aayushsiwa/expense-tracker/errors"
 	"aayushsiwa/expense-tracker/models"
 
 	"github.com/gin-gonic/gin"
@@ -19,7 +20,7 @@ func (h *Handler) ImportJSON(c *gin.Context) {
 	imported, err := h.Service.ImportJSON(c.Request.Context(), records)
 	if err != nil {
 		slog.ErrorContext(c.Request.Context(), "JSON import failed", slog.Any("error", err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "JSON import failed"})
+		errors.HandleError(c, err)
 		return
 	}
 

@@ -23,29 +23,35 @@ func (s *RecordService) CreateRecord(ctx context.Context, rec *models.Record) er
 		return errors.NewDatabase("Failed to find category", err)
 	}
 
-	var currentBalance float64
-	err = s.db.QueryRowContext(ctx, "SELECT COALESCE(balance, 0) FROM records ORDER BY date DESC, id DESC LIMIT 1").Scan(&currentBalance)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		currentBalance = 0
+		return errors.NewDatabase("Failed to begin transaction", err)
 	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
 
-	switch rec.Type {
-	case "income":
-		currentBalance += rec.Amount
-	case "expense":
-		currentBalance -= rec.Amount
-	}
-
-	_, err = s.db.ExecContext(ctx, `
+	_, err = tx.ExecContext(ctx, `
 		INSERT INTO records (id, date, description, "categoryID", amount, type, note, balance)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		rec.ID, rec.Date, rec.Description, categoryID, rec.Amount, rec.Type, rec.Note, currentBalance)
+		rec.ID, rec.Date, rec.Description, categoryID, rec.Amount, rec.Type, rec.Note, 0)
 	if err != nil {
 		return errors.NewDatabase("Failed to insert record", err)
 	}
 
-	if err := s.UpdateSummary(ctx); err != nil {
+	if err = recalculateBalances(ctx, tx); err != nil {
+		return errors.NewDatabase("Failed to recalculate balances", err)
+	}
+
+	if err = tx.Commit(); err != nil {
+		return errors.NewDatabase("Failed to commit transaction", err)
+	}
+
+	if err = s.UpdateSummary(ctx); err != nil {
 		slog.ErrorContext(ctx, "Failed to update summary after record creation", "record_id", rec.ID, "error", err)
+		return err
 	}
 
 	return nil
@@ -69,7 +75,50 @@ func (s *RecordService) GetRecord(ctx context.Context, id string) (*models.Recor
 	return &rec, nil
 }
 
-func (s *RecordService) GetRecords(ctx context.Context, whereClause string, filterArgs []any, limit, offset int) ([]models.Record, int, error) {
+func BuildWhereClause(q *models.QueryParams) (string, []any) {
+	filters := make([]string, 0, 5)
+	args := make([]any, 0, 5)
+
+	if q.Type != "" {
+		filters = append(filters, "r.type = ?")
+		args = append(args, q.Type)
+	}
+	if q.Category != "" {
+		filters = append(filters, "c.name = ?")
+		args = append(args, q.Category)
+	}
+	if q.From != "" {
+		filters = append(filters, "r.date >= ?")
+		args = append(args, q.From)
+	}
+	if q.To != "" {
+		filters = append(filters, "r.date <= ?")
+		args = append(args, q.To)
+	}
+	if q.MinAmount != 0 {
+		filters = append(filters, "r.amount >= ?")
+		args = append(args, q.MinAmount)
+	}
+	if q.MaxAmount != 0 {
+		filters = append(filters, "r.amount <= ?")
+		args = append(args, q.MaxAmount)
+	}
+	if q.Search != "" {
+		filters = append(filters, "LOWER(r.description) LIKE ?")
+		args = append(args, "%"+strings.ToLower(q.Search)+"%")
+	}
+
+	if len(filters) == 0 {
+		return "", args
+	}
+
+	return " WHERE " + strings.Join(filters, " AND "), args
+}
+
+func (s *RecordService) GetRecords(ctx context.Context, params *models.QueryParams) ([]models.Record, int, error) {
+	whereClause, filterArgs := BuildWhereClause(params)
+	offset := (params.Page - 1) * params.Limit
+
 	selectQuery := `
 		SELECT r.id, r.date, r.description, COALESCE(c.name, '') as category, r.amount, r.type, r.note, r.balance
 		FROM records r
@@ -79,7 +128,7 @@ func (s *RecordService) GetRecords(ctx context.Context, whereClause string, filt
 		LIMIT ? OFFSET ?
 	`
 
-	selectArgs := append(append([]any{}, filterArgs...), limit, offset)
+	selectArgs := append(append([]any{}, filterArgs...), params.Limit, offset)
 
 	rows, err := s.db.QueryContext(ctx, selectQuery, selectArgs...)
 	if err != nil {
@@ -118,9 +167,11 @@ func (s *RecordService) GetRecords(ctx context.Context, whereClause string, filt
 	return records, totalCount, nil
 }
 
-func (s *RecordService) GetGroupedRecords(ctx context.Context, groupBy, whereClause string, filterArgs []any) ([]models.GroupedRecord, error) {
+func (s *RecordService) GetGroupedRecords(ctx context.Context, params *models.QueryParams) ([]models.GroupedRecord, error) {
+	whereClause, filterArgs := BuildWhereClause(params)
+
 	var groupExpr, groupAlias string
-	switch groupBy {
+	switch params.GroupBy {
 	case "category":
 		groupExpr = "COALESCE(c.name, '')"
 		groupAlias = "category"
@@ -163,15 +214,6 @@ func (s *RecordService) GetGroupedRecords(ctx context.Context, groupBy, whereCla
 }
 
 func (s *RecordService) PatchRecord(ctx context.Context, id string, req *models.UpdateRecordRequest) error {
-	var exists int
-	err := s.db.QueryRow("SELECT COUNT(*) FROM records WHERE id = ?", id).Scan(&exists)
-	if err != nil {
-		return errors.NewDatabase("Failed to check record existence", err)
-	}
-	if exists == 0 {
-		return errors.NewNotFound(fmt.Sprintf("Record with ID %s not found", id), nil)
-	}
-
 	var setClauses []string
 	var args []any
 
@@ -197,7 +239,7 @@ func (s *RecordService) PatchRecord(ctx context.Context, id string, req *models.
 	}
 	if req.Category != nil {
 		var categoryID string
-		err := s.db.QueryRow(`SELECT "ID" FROM categories WHERE name = ?`, *req.Category).Scan(&categoryID)
+		err := s.db.QueryRowContext(ctx, `SELECT "ID" FROM categories WHERE name = ?`, *req.Category).Scan(&categoryID)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				return errors.NewInvalidInput("Category not found", err).WithDetails(map[string]any{
@@ -214,39 +256,59 @@ func (s *RecordService) PatchRecord(ctx context.Context, id string, req *models.
 		return nil
 	}
 
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return errors.NewDatabase("Failed to begin transaction", err)
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	var exists int
+	if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM records WHERE id = ?", id).Scan(&exists); err != nil {
+		return errors.NewDatabase("Failed to check record existence", err)
+	}
+	if exists == 0 {
+		return errors.NewNotFound(fmt.Sprintf("Record with ID %s not found", id), nil)
+	}
+
 	query := fmt.Sprintf("UPDATE records SET %s WHERE id = ?", strings.Join(setClauses, ", "))
 	args = append(args, id)
 
-	_, err = s.db.ExecContext(ctx, query, args...)
-	if err != nil {
+	if _, err = tx.ExecContext(ctx, query, args...); err != nil {
 		return errors.NewDatabase("Failed to update record", err)
 	}
 
-	tx, err := s.db.Begin()
-	if err != nil {
-		slog.WarnContext(ctx, "Failed to start transaction for balance recalculation", "error", err)
-	} else {
-		if err := recalculateBalances(ctx, tx); err != nil {
-			slog.WarnContext(ctx, "Failed to recalculate balances after record update", "record_id", id, "error", err)
-			if rbErr := tx.Rollback(); rbErr != nil {
-				slog.ErrorContext(ctx, "Failed to rollback transaction", "error", rbErr)
-			}
-		} else {
-			if cErr := tx.Commit(); cErr != nil {
-				slog.ErrorContext(ctx, "Failed to commit transaction", "error", cErr)
-			}
-		}
+	if err = recalculateBalances(ctx, tx); err != nil {
+		return errors.NewDatabase("Failed to recalculate balances", err)
 	}
 
-	if err := s.UpdateSummary(ctx); err != nil {
+	if err = tx.Commit(); err != nil {
+		return errors.NewDatabase("Failed to commit transaction", err)
+	}
+
+	if err = s.UpdateSummary(ctx); err != nil {
 		slog.ErrorContext(ctx, "Failed to update summary after record update", "record_id", id, "error", err)
+		return err
 	}
 
 	return nil
 }
 
 func (s *RecordService) DeleteRecord(ctx context.Context, id string) (int64, error) {
-	res, err := s.db.ExecContext(ctx, `DELETE FROM records WHERE id = ?`, id)
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, errors.NewDatabase("Failed to begin transaction", err)
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	res, err := tx.ExecContext(ctx, `DELETE FROM records WHERE id = ?`, id)
 	if err != nil {
 		return 0, errors.NewDatabase("Failed to delete record", err)
 	}
@@ -260,22 +322,45 @@ func (s *RecordService) DeleteRecord(ctx context.Context, id string) (int64, err
 		return 0, errors.NewNotFound(fmt.Sprintf("Record with ID %s not found", id), nil)
 	}
 
-	if err := s.UpdateSummary(ctx); err != nil {
+	if err = recalculateBalances(ctx, tx); err != nil {
+		return 0, errors.NewDatabase("Failed to recalculate balances", err)
+	}
+
+	if err = tx.Commit(); err != nil {
+		return 0, errors.NewDatabase("Failed to commit transaction", err)
+	}
+
+	if err = s.UpdateSummary(ctx); err != nil {
 		slog.ErrorContext(ctx, "Failed to update summary after record deletion", "record_id", id, "error", err)
+		return 0, err
 	}
 
 	return rowsAffected, nil
 }
 
-func (s *RecordService) ExportRecords(ctx context.Context) (*sql.Rows, error) {
+func (s *RecordService) ExportRecords(ctx context.Context) ([]models.Record, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT r.date, r.description, COALESCE(c.name, ''), r.amount, r.type, r.note
+		SELECT r.id, r.date, r.description, COALESCE(c.name, ''), r.amount, r.type, r.note, r.balance
 		FROM records r
 		LEFT JOIN categories c ON r."categoryID" = c.id
 		ORDER BY r.date DESC
 	`)
 	if err != nil {
-		return nil, err
+		return nil, errors.NewDatabase("Failed to export records", err)
 	}
-	return rows, nil
+	defer func() { _ = rows.Close() }()
+
+	records := make([]models.Record, 0)
+	for rows.Next() {
+		var rec models.Record
+		if err := rows.Scan(&rec.ID, &rec.Date, &rec.Description, &rec.Category, &rec.Amount, &rec.Type, &rec.Note, &rec.Balance); err != nil {
+			return nil, errors.NewDatabase("Failed to scan export record", err)
+		}
+		records = append(records, rec)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, errors.NewDatabase("Error iterating export records", err)
+	}
+
+	return records, nil
 }

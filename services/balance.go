@@ -10,7 +10,7 @@ import (
 )
 
 func (s *RecordService) RefreshBalances(ctx context.Context) error {
-	tx, err := s.db.Begin()
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return errors.NewDatabase("Failed to start transaction", err)
 	}
@@ -106,6 +106,10 @@ func recalculateBalances(ctx context.Context, tx *sql.Tx) error {
 			ids = nil
 			balances = nil
 		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return err
 	}
 
 	if err := updateBatch(); err != nil {

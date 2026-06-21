@@ -11,12 +11,12 @@ import (
 type Service interface {
 	CreateRecord(ctx context.Context, rec *models.Record) error
 	GetRecord(ctx context.Context, id string) (*models.Record, error)
-	GetRecords(ctx context.Context, whereClause string, filterArgs []any, limit, offset int) ([]models.Record, int, error)
-	GetGroupedRecords(ctx context.Context, groupBy, whereClause string, filterArgs []any) ([]models.GroupedRecord, error)
+	GetRecords(ctx context.Context, params *models.QueryParams) ([]models.Record, int, error)
+	GetGroupedRecords(ctx context.Context, params *models.QueryParams) ([]models.GroupedRecord, error)
 	PatchRecord(ctx context.Context, id string, req *models.UpdateRecordRequest) error
 	DeleteRecord(ctx context.Context, id string) (int64, error)
 
-	ExportRecords(ctx context.Context) (*sql.Rows, error)
+	ExportRecords(ctx context.Context) ([]models.Record, error)
 
 	ImportCSV(ctx context.Context, src io.Reader) (imported, skipped int, err error)
 	ImportJSON(ctx context.Context, records []models.Record) (imported int, err error)

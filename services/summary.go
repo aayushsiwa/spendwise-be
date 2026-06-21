@@ -15,7 +15,7 @@ import (
 func (s *RecordService) UpdateSummary(ctx context.Context) (err error) {
 	slog.InfoContext(ctx, "Updating summary...")
 
-	tx, err := s.db.Begin()
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return errors.NewDatabase("Failed to begin transaction", err)
 	}
@@ -26,15 +26,15 @@ func (s *RecordService) UpdateSummary(ctx context.Context) (err error) {
 		}
 	}()
 
-	if _, err = tx.Exec("DELETE FROM summary"); err != nil {
+	if _, err = tx.ExecContext(ctx, "DELETE FROM summary"); err != nil {
 		return errors.NewDatabase("Failed to clear summary", err)
 	}
-	if _, err = tx.Exec("DELETE FROM summary_details"); err != nil {
+	if _, err = tx.ExecContext(ctx, "DELETE FROM summary_details"); err != nil {
 		return errors.NewDatabase("Failed to clear summary_details", err)
 	}
 
 	var minMonth sql.NullString
-	if err = tx.QueryRow(`
+	if err = tx.QueryRowContext(ctx, `
 		SELECT MIN(strftime('%Y-%m', date))
 		FROM records
 	`).Scan(&minMonth); err != nil {
@@ -48,7 +48,7 @@ func (s *RecordService) UpdateSummary(ctx context.Context) (err error) {
 
 	maxMonth := time.Now().Format("2006-01")
 
-	rows, err := tx.Query(`
+	rows, err := tx.QueryContext(ctx, `
 		SELECT
 			strftime('%Y-%m', date) AS month,
 			SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) AS "totalIncome",
@@ -86,7 +86,7 @@ func (s *RecordService) UpdateSummary(ctx context.Context) (err error) {
 		net := d.income - d.expense
 		closing := openingBalance + net
 
-		_, err = tx.Exec(`
+		_, err = tx.ExecContext(ctx, `
 			INSERT INTO summary (month, "totalIncome", "totalExpense", "openingBalance", "netBalance", "closingBalance")
 			VALUES (?, ?, ?, ?, ?, ?)
 		`, m, d.income, d.expense, openingBalance, net, closing)
@@ -97,10 +97,9 @@ func (s *RecordService) UpdateSummary(ctx context.Context) (err error) {
 		openingBalance = closing
 	}
 
-	_, err = tx.Exec(`
-		INSERT INTO summary_details ("ID", month, type, "categoryID", "categoryName", amount)
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO summary_details (month, type, "categoryID", "categoryName", amount)
 		SELECT
-			r.id,
 			strftime('%Y-%m', r.date) AS month,
 			r.type,
 			COALESCE(c."ID", '') AS "categoryID",

@@ -1,342 +1,342 @@
 package validation
 
 import (
+	"testing"
+
 	"aayushsiwa/expense-tracker/errors"
 	"aayushsiwa/expense-tracker/models"
-	"reflect"
-	"testing"
 )
 
 func TestNewValidator(t *testing.T) {
-	tests := []struct {
-		name string
-		want *Validator
-	}{
-		// TODO: Add test cases.
+	v := NewValidator()
+	if v == nil {
+		t.Fatal("NewValidator() returned nil")
 	}
+	if v.errors == nil {
+		t.Fatal("errors slice not initialized")
+	}
+}
+
+func TestHasErrors_GetErrors(t *testing.T) {
+	v := NewValidator()
+	if v.HasErrors() {
+		t.Error("fresh validator should not have errors")
+	}
+	if len(v.GetErrors()) != 0 {
+		t.Error("fresh validator GetErrors should be empty")
+	}
+
+	v.errors = append(v.errors, errors.NewValidationError("x", "err", ""))
+	if !v.HasErrors() {
+		t.Error("should have errors after adding one")
+	}
+	if len(v.GetErrors()) != 1 {
+		t.Error("GetErrors should return 1 error")
+	}
+}
+
+func TestValidateID(t *testing.T) {
+	tests := []struct {
+		name     string
+		idStr    string
+		wantID   string
+		wantErrs int
+	}{
+		{"empty returns error", "", "", 1},
+		{"valid ID returns as-is", "abc123", "abc123", 0},
+		{"whitespace treated as valid (only checks empty)", "   ", "   ", 0},
+	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := NewValidator(); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("NewValidator() = %v, want %v", got, tt.want)
+			v := NewValidator()
+			gotID, errs := v.ValidateID(tt.idStr)
+			if gotID != tt.wantID {
+				t.Errorf("got id %q, want %q", gotID, tt.wantID)
+			}
+			if len(errs) != tt.wantErrs {
+				t.Errorf("got %d errors, want %d: %+v", len(errs), tt.wantErrs, errs)
 			}
 		})
 	}
 }
 
-func TestValidator_GetErrors(t *testing.T) {
-	type fields struct {
-		errors errors.ValidationErrors
-	}
+func TestValidateRecord(t *testing.T) {
 	tests := []struct {
-		name   string
-		fields fields
-		want   errors.ValidationErrors
+		name     string
+		record   *models.Record
+		wantErrs int
+		check    func(t *testing.T, errs errors.ValidationErrors)
 	}{
-		// TODO: Add test cases.
+		{
+			name:     "missing required fields",
+			record:   &models.Record{},
+			wantErrs: 3,
+			check: func(t *testing.T, errs errors.ValidationErrors) {
+				fields := map[string]bool{}
+				for _, e := range errs {
+					fields[e.Field] = true
+				}
+				if !fields["date"] {
+					t.Error("missing date error")
+				}
+				if !fields["category"] {
+					t.Error("missing category error")
+				}
+				if !fields["amount"] {
+					t.Error("missing amount error")
+				}
+			},
+		},
+		{
+			name: "invalid date format",
+			record: &models.Record{
+				Date: "01-15-2024", Category: "Food", Amount: 10, Description: "x",
+			},
+			wantErrs: 1,
+		},
+		{
+			name: "zero amount",
+			record: &models.Record{
+				Date: "2024-01-15", Category: "Food", Amount: 0, Description: "x",
+			},
+			wantErrs: 1,
+		},
+		{
+			name: "negative amount",
+			record: &models.Record{
+				Date: "2024-01-15", Category: "Food", Amount: -5, Description: "x",
+			},
+			wantErrs: 1,
+		},
+		{
+			name: "description too long",
+			record: &models.Record{
+				Date: "2024-01-15", Category: "Food", Amount: 10,
+				Description: string(make([]byte, 256)),
+			},
+			wantErrs: 1,
+		},
+		{
+			name: "note too long",
+			record: &models.Record{
+				Date: "2024-01-15", Category: "Food", Amount: 10, Description: "x",
+				Note: string(make([]byte, 1001)),
+			},
+			wantErrs: 1,
+		},
+		{
+			name: "valid record",
+			record: &models.Record{
+				Date: "2024-01-15", Category: "Food", Amount: 10, Description: "groceries",
+			},
+			wantErrs: 0,
+		},
+		{
+			name: "valid record with note",
+			record: &models.Record{
+				Date: "2024-01-15", Category: "Food", Amount: 10, Description: "groceries",
+				Note: "weekly shop",
+			},
+			wantErrs: 0,
+		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := &Validator{
-				errors: tt.fields.errors,
+			v := NewValidator()
+			errs := v.ValidateRecord(tt.record)
+			if len(errs) != tt.wantErrs {
+				t.Errorf("got %d errors, want %d: %+v", len(errs), tt.wantErrs, errs)
 			}
-			if got := v.GetErrors(); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("GetErrors() = %v, want %v", got, tt.want)
+			if tt.check != nil {
+				tt.check(t, errs)
 			}
 		})
 	}
 }
 
-func TestValidator_HasErrors(t *testing.T) {
-	type fields struct {
-		errors errors.ValidationErrors
-	}
+func TestValidatePatchRecord(t *testing.T) {
 	tests := []struct {
-		name   string
-		fields fields
-		want   bool
+		name     string
+		req      *models.UpdateRecordRequest
+		wantErrs int
 	}{
-		// TODO: Add test cases.
+		{
+			name:     "empty patch is valid",
+			req:      &models.UpdateRecordRequest{},
+			wantErrs: 0,
+		},
+		{
+			name: "invalid date",
+			req: &models.UpdateRecordRequest{
+				Date: new("01-15-2024"),
+			},
+			wantErrs: 1,
+		},
+		{
+			name: "valid date",
+			req: &models.UpdateRecordRequest{
+				Date: new("2024-01-15"),
+			},
+			wantErrs: 0,
+		},
+		{
+			name: "negative amount",
+			req: &models.UpdateRecordRequest{
+				Amount: new(float64(-1)),
+			},
+			wantErrs: 1,
+		},
+		{
+			name: "zero amount",
+			req: &models.UpdateRecordRequest{
+				Amount: new(float64(0)),
+			},
+			wantErrs: 1,
+		},
+		{
+			name: "valid amount",
+			req: &models.UpdateRecordRequest{
+				Amount: new(float64(50)),
+			},
+			wantErrs: 0,
+		},
+		{
+			name: "description too long",
+			req: &models.UpdateRecordRequest{
+				Description: new(string(make([]byte, 256))),
+			},
+			wantErrs: 1,
+		},
+		{
+			name: "note too long",
+			req: &models.UpdateRecordRequest{
+				Note: new(string(make([]byte, 1001))),
+			},
+			wantErrs: 1,
+		},
+		{
+			name: "valid patch all fields",
+			req: &models.UpdateRecordRequest{
+				Date:        new("2024-06-01"),
+				Description: new("new desc"),
+				Amount:      new(99.99),
+				Note:        new("updated note"),
+			},
+			wantErrs: 0,
+		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := &Validator{
-				errors: tt.fields.errors,
-			}
-			if got := v.HasErrors(); got != tt.want {
-				t.Errorf("HasErrors() = %v, want %v", got, tt.want)
+			v := NewValidator()
+			errs := v.ValidatePatchRecord(tt.req)
+			if len(errs) != tt.wantErrs {
+				t.Errorf("got %d errors, want %d: %+v", len(errs), tt.wantErrs, errs)
 			}
 		})
 	}
 }
 
-func TestValidator_ValidateCategory(t *testing.T) {
-	type fields struct {
-		errors errors.ValidationErrors
-	}
-	type args struct {
-		category *models.Category
-	}
+func TestValidateCategory(t *testing.T) {
 	tests := []struct {
-		name   string
-		fields fields
-		args   args
-		want   errors.ValidationErrors
+		name     string
+		cat      *models.Category
+		wantErrs int
 	}{
-		// TODO: Add test cases.
+		{
+			name:     "empty name",
+			cat:      &models.Category{},
+			wantErrs: 1,
+		},
+		{
+			name:     "invalid characters in name",
+			cat:      &models.Category{Name: "Food!!!"},
+			wantErrs: 1,
+		},
+		{
+			name:     "name too long",
+			cat:      &models.Category{Name: string(make([]byte, 51))},
+			wantErrs: 2,
+		},
+		{
+			name:     "invalid hex color",
+			cat:      &models.Category{Name: "Food", Color: "red"},
+			wantErrs: 1,
+		},
+		{
+			name:     "icon too long",
+			cat:      &models.Category{Name: "Food", Icon: string(make([]byte, 51))},
+			wantErrs: 1,
+		},
+		{
+			name:     "valid category",
+			cat:      &models.Category{Name: "Food", Icon: "pizza", Color: "#FF0000"},
+			wantErrs: 0,
+		},
+		{
+			name:     "valid category no icon or color",
+			cat:      &models.Category{Name: "Transport"},
+			wantErrs: 0,
+		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := &Validator{
-				errors: tt.fields.errors,
-			}
-			if got := v.ValidateCategory(tt.args.category); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("ValidateCategory() = %v, want %v", got, tt.want)
+			v := NewValidator()
+			errs := v.ValidateCategory(tt.cat)
+			if len(errs) != tt.wantErrs {
+				t.Errorf("got %d errors, want %d: %+v", len(errs), tt.wantErrs, errs)
 			}
 		})
 	}
 }
 
-func TestValidator_ValidateID(t *testing.T) {
-	type fields struct {
-		errors errors.ValidationErrors
-	}
-	type args struct {
-		idStr string
-	}
+func TestEnum(t *testing.T) {
 	tests := []struct {
-		name   string
-		fields fields
-		args   args
-		want   string
-		want1  errors.ValidationErrors
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			v := &Validator{
-				errors: tt.fields.errors,
-			}
-			got, got1 := v.ValidateID(tt.args.idStr)
-			if got != tt.want {
-				t.Errorf("ValidateID() got = %v, want %v", got, tt.want)
-			}
-			if !reflect.DeepEqual(got1, tt.want1) {
-				t.Errorf("ValidateID() got1 = %v, want %v", got1, tt.want1)
-			}
-		})
-	}
-}
-
-func TestValidator_ValidateRecord(t *testing.T) {
-	type fields struct {
-		errors errors.ValidationErrors
-	}
-	type args struct {
-		record *models.Record
-	}
-	tests := []struct {
-		name   string
-		fields fields
-		args   args
-		want   errors.ValidationErrors
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			v := &Validator{
-				errors: tt.fields.errors,
-			}
-			if got := v.ValidateRecord(tt.args.record); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("ValidateRecord() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestValidator_dateFormat(t *testing.T) {
-	type fields struct {
-		errors errors.ValidationErrors
-	}
-	type args struct {
-		field   string
-		value   string
-		message string
-	}
-	tests := []struct {
-		name   string
-		fields fields
-		args   args
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			v := &Validator{
-				errors: tt.fields.errors,
-			}
-			v.dateFormat(tt.args.field, tt.args.value, tt.args.message)
-		})
-	}
-}
-
-func TestValidator_enum(t *testing.T) {
-	type fields struct {
-		errors errors.ValidationErrors
-	}
-	type args struct {
-		field   string
+		name    string
 		value   string
 		allowed []string
-		message string
-	}
-	tests := []struct {
-		name   string
-		fields fields
-		args   args
+		wantErr bool
 	}{
-		// TODO: Add test cases.
+		{"value in list", "income", []string{"income", "expense", "transfer"}, false},
+		{"value not in list", "invalid", []string{"income", "expense", "transfer"}, true},
+		{"empty allowed list", "x", nil, true},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := &Validator{
-				errors: tt.fields.errors,
+			v := NewValidator()
+			v.enum("type", tt.value, tt.allowed, "invalid type")
+			hasErr := v.HasErrors()
+			if hasErr != tt.wantErr {
+				t.Errorf("HasErrors() = %v, want %v; errors=%+v", hasErr, tt.wantErr, v.errors)
 			}
-			v.enum(tt.args.field, tt.args.value, tt.args.allowed, tt.args.message)
 		})
 	}
 }
 
-func TestValidator_maxLength(t *testing.T) {
-	type fields struct {
-		errors errors.ValidationErrors
-	}
-	type args struct {
-		field   string
-		value   string
-		max     int
-		message string
-	}
+func TestMinLength(t *testing.T) {
 	tests := []struct {
-		name   string
-		fields fields
-		args   args
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			v := &Validator{
-				errors: tt.fields.errors,
-			}
-			v.maxLength(tt.args.field, tt.args.value, tt.args.max, tt.args.message)
-		})
-	}
-}
-
-func TestValidator_minLength(t *testing.T) {
-	type fields struct {
-		errors errors.ValidationErrors
-	}
-	type args struct {
-		field   string
+		name    string
 		value   string
 		min     int
-		message string
-	}
-	tests := []struct {
-		name   string
-		fields fields
-		args   args
+		wantErr bool
 	}{
-		// TODO: Add test cases.
+		{"shorter than min", "ab", 3, true},
+		{"exactly min", "abc", 3, false},
+		{"longer than min", "abcd", 3, false},
+		{"empty with min=1", "", 1, true},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			v := &Validator{
-				errors: tt.fields.errors,
-			}
-			v.minLength(tt.args.field, tt.args.value, tt.args.min, tt.args.message)
-		})
-	}
-}
 
-func TestValidator_pattern(t *testing.T) {
-	type fields struct {
-		errors errors.ValidationErrors
-	}
-	type args struct {
-		field   string
-		value   string
-		pattern string
-		message string
-	}
-	tests := []struct {
-		name   string
-		fields fields
-		args   args
-	}{
-		// TODO: Add test cases.
-	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := &Validator{
-				errors: tt.fields.errors,
+			v := NewValidator()
+			v.minLength("f", tt.value, tt.min, "too short")
+			if v.HasErrors() != tt.wantErr {
+				t.Errorf("minLength(%q, %d) → HasErrors()=%v, want %v", tt.value, tt.min, v.HasErrors(), tt.wantErr)
 			}
-			v.pattern(tt.args.field, tt.args.value, tt.args.pattern, tt.args.message)
-		})
-	}
-}
-
-func TestValidator_positiveNumber(t *testing.T) {
-	type fields struct {
-		errors errors.ValidationErrors
-	}
-	type args struct {
-		field   string
-		value   float64
-		message string
-	}
-	tests := []struct {
-		name   string
-		fields fields
-		args   args
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			v := &Validator{
-				errors: tt.fields.errors,
-			}
-			v.positiveNumber(tt.args.field, tt.args.value, tt.args.message)
-		})
-	}
-}
-
-func TestValidator_required(t *testing.T) {
-	type fields struct {
-		errors errors.ValidationErrors
-	}
-	type args struct {
-		field   string
-		value   string
-		message string
-	}
-	tests := []struct {
-		name   string
-		fields fields
-		args   args
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			v := &Validator{
-				errors: tt.fields.errors,
-			}
-			v.required(tt.args.field, tt.args.value, tt.args.message)
 		})
 	}
 }
