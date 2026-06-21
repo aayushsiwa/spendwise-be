@@ -16,7 +16,7 @@ func (h *Handler) DeleteRecord(c *gin.Context) {
 
 	// Validate ID parameter
 	validator := validation.NewValidator()
-	id, validationErrs := validator.ValidateID(idStr)
+	id, validationErrs := validator.ValidateRecordID(idStr)
 	if len(validationErrs) > 0 {
 		errors.HandleValidationErrors(c, validationErrs)
 		return
@@ -37,7 +37,7 @@ func (h *Handler) DeleteRecord(c *gin.Context) {
 	}
 
 	if rowsAffected == 0 {
-		appErr := errors.NewNotFound(fmt.Sprintf("Record with ID %d not found", id), nil)
+		appErr := errors.NewNotFound(fmt.Sprintf("Record with ID %s not found", id), nil)
 		errors.HandleError(c, appErr)
 		return
 	}
@@ -49,6 +49,6 @@ func (h *Handler) DeleteRecord(c *gin.Context) {
 
 	slog.Info("Record deleted successfully", "record_id", id)
 	c.JSON(http.StatusOK, gin.H{
-		"message": fmt.Sprintf("Record with id %d deleted successfully", id),
+		"message": fmt.Sprintf("Record with id %s deleted successfully", id),
 	})
 }

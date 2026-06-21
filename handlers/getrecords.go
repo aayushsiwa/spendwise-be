@@ -33,7 +33,7 @@ func (h *Handler) GetRecords(c *gin.Context) {
 	selectQuery := `
 		SELECT r.id, r.date, r.description, COALESCE(c.name, '') as category, r.amount, r.type, r.note, r.balance
 		FROM records r
-		LEFT JOIN categories c ON r.category_id = c.id
+		LEFT JOIN categories c ON r."categoryID" = c.id
 	` + whereClause + `
 		ORDER BY r.date DESC
 		LIMIT ? OFFSET ?
@@ -84,7 +84,7 @@ func (h *Handler) GetRecords(c *gin.Context) {
 	countQuery := `
 		SELECT COUNT(*)
 		FROM records r
-		LEFT JOIN categories c ON r.category_id = c.id
+		LEFT JOIN categories c ON r."categoryID" = c.id
 	` + whereClause
 
 	slog.Debug("Executing count query", "query", strings.TrimSpace(countQuery), "args", filterArgs)
@@ -106,11 +106,11 @@ func (h *Handler) GetRecords(c *gin.Context) {
 
 	slog.Info("Records retrieved successfully",
 		"count", len(records),
-		"filters_applied", whereClause != "",
+		"filtersApplied", whereClause != "",
 		"page", queryParams.Page,
 		"limit", queryParams.Limit,
-		"total_count", totalCount,
-		"total_pages", totalPages,
+		"totalCount", totalCount,
+		"totalPages", totalPages,
 	)
 
 	res := models.RecordsResponse{

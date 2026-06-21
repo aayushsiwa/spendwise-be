@@ -40,8 +40,8 @@ type QueryParams struct {
 type PaginationMetadata struct {
 	Page       int  `json:"page"`
 	Limit      int  `json:"limit"`
-	TotalPages int  `json:"total_pages,omitempty"`
-	TotalCount int  `json:"total_count,omitempty"`
-	HasPrev    bool `json:"has_prev,omitempty"`
-	HasNext    bool `json:"has_next,omitempty"`
+	TotalPages int  `json:"totalPages,omitempty"`
+	TotalCount int  `json:"totalCount,omitempty"`
+	HasPrev    bool `json:"hasPrev,omitempty"`
+	HasNext    bool `json:"hasNext,omitempty"`
 }

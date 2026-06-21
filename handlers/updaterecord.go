@@ -8,6 +8,11 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
+
+	"aayushsiwa/expense-tracker/errors"
+	"aayushsiwa/expense-tracker/models"
+	"aayushsiwa/expense-tracker/validation"
 
 	"github.com/gin-gonic/gin"
 )
@@ -18,16 +23,21 @@ func (h *Handler) PatchRecord(c *gin.Context) {
 
 	// Validate ID parameter
 	validator := validation.NewValidator()
-	id, validationErrs := validator.ValidateID(idStr)
+	id, validationErrs := validator.ValidateRecordID(idStr)
 	if len(validationErrs) > 0 {
 		errors.HandleValidationErrors(c, validationErrs)
 		return
 	}
 
-	var rec models.Record
-	if err := c.ShouldBindJSON(&rec); err != nil {
-		appErr := errors.NewInvalidInput("Invalid JSON body", err)
-		errors.HandleError(c, appErr)
+	// Check if record exists
+	var exists int
+	err := h.DB.QueryRow("SELECT COUNT(*) FROM records WHERE id = ?", id).Scan(&exists)
+	if err != nil {
+		errors.HandleError(c, errors.NewDatabase("Failed to check record existence", err))
+		return
+	}
+	if exists == 0 {
+		errors.HandleError(c, errors.NewNotFound(fmt.Sprintf("Record with ID %s not found", id), nil))
 		return
 	}
 
@@ -58,26 +68,7 @@ func (h *Handler) PatchRecord(c *gin.Context) {
 	var exists int
 	err = h.DB.QueryRow("SELECT COUNT(*) FROM records WHERE id = ?", id).Scan(&exists)
 	if err != nil {
-		appErr := errors.NewDatabase("Failed to check record existence", err)
-		errors.HandleError(c, appErr)
-		return
-	}
-
-	if exists == 0 {
-		appErr := errors.NewNotFound(fmt.Sprintf("Record with ID %d not found", id), nil)
-		errors.HandleError(c, appErr)
-		return
-	}
-
-	// Update record
-	_, err = h.DB.Exec(`
-		UPDATE records 
-		SET date = ?, description = ?, category_id = ?, amount = ?, type = ?, note = ?
-		WHERE id = ?`,
-		rec.Date, rec.Description, categoryId, rec.Amount, rec.Type, rec.Note, id)
-	if err != nil {
-		appErr := errors.NewDatabase("Failed to update record", err)
-		errors.HandleError(c, appErr)
+		errors.HandleError(c, errors.NewDatabase("Failed to update record", err))
 		return
 	}
 
@@ -99,7 +90,6 @@ func (h *Handler) PatchRecord(c *gin.Context) {
 		slog.Warn("Failed to update summary after record update", "record_id", id, "error", err)
 	}
 
-	rec.ID = id
-	slog.Info("Record updated successfully", "record_id", rec.ID)
-	c.JSON(http.StatusOK, rec)
+	slog.Info("Record updated successfully", "record_id", id)
+	c.JSON(http.StatusOK, gin.H{"message": "Record updated", "ID": id})
 }

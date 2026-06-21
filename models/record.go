@@ -9,7 +9,7 @@ const (
 )
 
 type Record struct {
-	ID          int        `json:"id"`
+	ID          string     `json:"ID"`
 	Date        string     `json:"date"`
 	Description string     `json:"description"`
 	Category    string     `json:"category"`

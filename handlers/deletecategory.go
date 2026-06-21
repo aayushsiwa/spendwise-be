@@ -31,7 +31,7 @@ func (h *Handler) DeleteCategory(c *gin.Context) {
 
 	if exists == 0 {
 		appErr := errors.NewNotFound("Category not found", nil).WithDetails(map[string]interface{}{
-			"category_id": id,
+			"categoryID": id,
 		})
 		errors.HandleError(c, appErr)
 		return
@@ -39,7 +39,7 @@ func (h *Handler) DeleteCategory(c *gin.Context) {
 
 	// Check if category is being used by any records
 	var recordCount int
-	err = h.DB.QueryRow("SELECT COUNT(*) FROM records WHERE category_id = ?", id).Scan(&recordCount)
+	err = h.DB.QueryRow(`SELECT COUNT(*) FROM records WHERE "categoryID" = ?`, id).Scan(&recordCount)
 	if err != nil {
 		appErr := errors.NewDatabase("Failed to check category usage", err)
 		errors.HandleError(c, appErr)
@@ -48,8 +48,8 @@ func (h *Handler) DeleteCategory(c *gin.Context) {
 
 	if recordCount > 0 {
 		appErr := errors.NewConflict("Cannot delete category that has associated records", nil).WithDetails(map[string]interface{}{
-			"category_id":  id,
-			"record_count": recordCount,
+			"categoryID":  id,
+			"recordCount": recordCount,
 		})
 		errors.HandleError(c, appErr)
 		return
@@ -62,6 +62,6 @@ func (h *Handler) DeleteCategory(c *gin.Context) {
 		return
 	}
 
-	slog.Info("Category deleted successfully", "category_id", id)
+	slog.Info("Category deleted successfully", "categoryID", id)
 	c.JSON(http.StatusNoContent, nil)
 }

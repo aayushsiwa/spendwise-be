@@ -46,7 +46,7 @@ func (h *Handler) UpdateCategory(c *gin.Context) {
 
 	if exists == 0 {
 		appErr := errors.NewNotFound("Category not found", nil).WithDetails(map[string]interface{}{
-			"category_id": id,
+			"categoryID": id,
 		})
 		errors.HandleError(c, appErr)
 		return
@@ -60,6 +60,6 @@ func (h *Handler) UpdateCategory(c *gin.Context) {
 		return
 	}
 
-	slog.Info("Category updated successfully", "category_id", id, "name", cat.Name)
-	c.JSON(http.StatusOK, gin.H{"id": id, "name": cat.Name, "icon": cat.Icon, "color": cat.Color})
+	slog.Info("Category updated successfully", "categoryID", id, "name", cat.Name)
+	c.JSON(http.StatusOK, gin.H{"ID": id, "name": cat.Name, "icon": cat.Icon, "color": cat.Color})
 }

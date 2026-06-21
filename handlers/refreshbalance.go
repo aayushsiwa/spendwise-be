@@ -49,14 +49,14 @@ func (h *Handler) recalculateBalances(ctx context.Context, tx *sql.Tx) error {
 	defer func(rows *sql.Rows) {
 		err := rows.Close()
 		if err != nil {
-			slog.ErrorContext(ctx, "Error closing rows: %v", err)
+			slog.ErrorContext(ctx, "Error closing rows", "err", err)
 		}
 	}(rows)
 
 	var (
 		runningBalance float64
 		batchSize      = 100
-		ids            []int
+		ids            []string
 		balances       []float64
 	)
 
@@ -88,7 +88,7 @@ func (h *Handler) recalculateBalances(ctx context.Context, tx *sql.Tx) error {
 	}
 
 	for rows.Next() {
-		var id int
+		var id string
 		var date string
 		var amount float64
 		var recordType string

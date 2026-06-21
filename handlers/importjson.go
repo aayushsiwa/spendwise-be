@@ -75,7 +75,7 @@ func (h *Handler) ImportJSON(c *gin.Context) {
 			continue
 		}
 
-		_, err = h.DB.Exec(`INSERT INTO records (id, date, description, category_id, amount, type, note, balance) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		_, err = h.DB.Exec(`INSERT INTO records (id, date, description, "categoryID", amount, type, note, balance) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 			customID, date, rec.Description, categoryID, rec.Amount, rec.Type, rec.Note, currentBalance)
 		if err != nil {
 			log.Printf("Failed to insert record: %v", err)
@@ -99,7 +99,7 @@ func (h *Handler) ImportJSON(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
-		"message":          "JSON import completed successfully",
-		"records_imported": importedCount,
+		"message":         "JSON import completed successfully",
+		"recordsImported": importedCount,
 	})
 }

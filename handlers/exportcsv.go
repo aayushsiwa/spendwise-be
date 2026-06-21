@@ -14,7 +14,7 @@ func (h *Handler) ExportCSV(c *gin.Context) {
 	rows, err := h.DB.Query(`
 		SELECT r.date, r.description, COALESCE(c.name, ''), r.amount, r.type, r.note
 		FROM records r
-		LEFT JOIN categories c ON r.category_id = c.id
+		LEFT JOIN categories c ON r."categoryID" = c.id
 		ORDER BY r.date DESC
 	`)
 	if err != nil {

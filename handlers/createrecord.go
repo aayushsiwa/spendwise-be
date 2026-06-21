@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -38,16 +37,11 @@ func (h *Handler) CreateRecord(c *gin.Context) {
 		return
 	}
 
-	rec.ID, err = strconv.Atoi(customId)
-	if err != nil {
-		appErr := errors.NewInternal("Failed to parse generated ID", err)
-		errors.HandleError(c, appErr)
-		return
-	}
+	rec.ID = customId
 
 	// Get category ID
-	var categoryId int
-	err = h.DB.QueryRow("SELECT id FROM categories WHERE name = ?", strings.ToLower(rec.Category)).Scan(&categoryId)
+	var categoryID int
+	err = h.DB.QueryRow("SELECT id FROM categories WHERE name = ?", strings.ToLower(rec.Category)).Scan(&categoryID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			appErr := errors.NewInvalidInput("Category not found", err).WithDetails(map[string]interface{}{
@@ -76,9 +70,9 @@ func (h *Handler) CreateRecord(c *gin.Context) {
 
 	// Insert record
 	_, err = h.DB.Exec(`
-		INSERT INTO records (id, date, description, category_id, amount, type, note, balance)
+		INSERT INTO records (id, date, description, "categoryID", amount, type, note, balance)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		rec.ID, rec.Date, rec.Description, categoryId, rec.Amount, rec.Type, rec.Note, currentBalance)
+		rec.ID, rec.Date, rec.Description, categoryID, rec.Amount, rec.Type, rec.Note, currentBalance)
 	if err != nil {
 		appErr := errors.NewDatabase("Failed to insert record", err)
 		errors.HandleError(c, appErr)
@@ -92,7 +86,7 @@ func (h *Handler) CreateRecord(c *gin.Context) {
 
 	slog.Info("Record created successfully", "record_id", rec.ID)
 	c.JSON(http.StatusCreated, gin.H{
-		"message": fmt.Sprintf("Record with id %d created successfully", rec.ID),
-		"id":      rec.ID,
+		"message": fmt.Sprintf("Record with id %s created successfully", rec.ID),
+		"ID":      rec.ID,
 	})
 }

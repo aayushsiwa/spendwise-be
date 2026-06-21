@@ -75,14 +75,14 @@ func (h *Handler) CreateCategories(c *gin.Context) {
 				slog.Error("Failed to rollback transaction", "error", rbErr)
 			}
 			appErr := errors.NewDatabase("Failed to insert category", err).WithDetails(map[string]interface{}{
-				"category_name": cat.Name,
+				"categoryName": cat.Name,
 			})
 			errors.HandleError(c, appErr)
 			return
 		}
 		id, _ := result.LastInsertId()
 		inserted = append(inserted, gin.H{
-			"id":    id,
+			"ID":    id,
 			"name":  lowerName,
 			"icon":  cat.Icon,
 			"color": cat.Color,

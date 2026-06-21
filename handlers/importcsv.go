@@ -11,9 +11,11 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/lithammer/shortuuid/v4"
 )
 
 type recordRow struct {
+	id          string
 	date        interface{}
 	description string
 	categoryID  interface{} // nil or int
@@ -37,14 +39,15 @@ func insertBatch(tx *sql.Tx, batch []recordRow) error {
 	}
 
 	query := `INSERT INTO records
-(date, description, category_id, amount, type, note, balance)
+(id, date, description, "categoryID", amount, type, note, balance)
 VALUES `
 	args := []interface{}{}
 	values := make([]string, 0, len(batch))
 
 	for _, r := range batch {
-		values = append(values, "(?, ?, ?, ?, ?, ?, 0)")
+		values = append(values, "(?, ?, ?, ?, ?, ?, ?, 0)")
 		args = append(args,
+			r.id,
 			r.date,
 			r.description,
 			r.categoryID,
@@ -227,6 +230,7 @@ func (h *Handler) ImportCSV(c *gin.Context) {
 		}
 
 		batch = append(batch, recordRow{
+			id:          shortuuid.New(),
 			date:        date,
 			description: description,
 			categoryID:  catID,

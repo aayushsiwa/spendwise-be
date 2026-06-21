@@ -54,8 +54,8 @@ func (h *Handler) UpdateSummary() (err error) {
 	rows, err := tx.Query(`
 		SELECT
 			strftime('%Y-%m', date) AS month,
-			SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) AS total_income,
-			SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) AS total_expense
+			SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) AS "totalIncome",
+			SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) AS "totalExpense"
 		FROM records
 		GROUP BY month
 		ORDER BY month ASC
@@ -90,7 +90,7 @@ func (h *Handler) UpdateSummary() (err error) {
 		closing := openingBalance + net
 
 		_, err = tx.Exec(`
-			INSERT INTO summary (month, total_income, total_expense, opening_balance, net_balance, closing_balance)
+			INSERT INTO summary (month, "totalIncome", "totalExpense", "openingBalance", "netBalance", "closingBalance")
 			VALUES (?, ?, ?, ?, ?, ?)
 		`, m, d.income, d.expense, openingBalance, net, closing)
 		if err != nil {
@@ -101,16 +101,16 @@ func (h *Handler) UpdateSummary() (err error) {
 	}
 
 	_, err = tx.Exec(`
-		INSERT INTO summary_details ("ID", month, type, category_id, category_name, amount)
+		INSERT INTO summary_details ("ID", month, type, "categoryID", "categoryName", amount)
 		SELECT
 			r.id,
 			strftime('%Y-%m', r.date) AS month,
 			r.type,
-			COALESCE(c.id, 0) AS category_id,
-			COALESCE(c.name, 'uncategorized') AS category_name,
+			COALESCE(c.id, 0) AS "categoryID",
+			COALESCE(c.name, 'uncategorized') AS "categoryName",
 			SUM(r.amount) AS amount
 		FROM records r
-		LEFT JOIN categories c ON r.category_id = c.id
+		LEFT JOIN categories c ON r."categoryID" = c.id
 		WHERE r.type IN ('income', 'expense', 'transfer')
 		GROUP BY month, r.type, COALESCE(c.id, 0), COALESCE(c.name, 'uncategorized')
 	`)
@@ -166,7 +166,7 @@ func (h *Handler) GetSummary(c *gin.Context) {
 	detailQuery := `
 		SELECT COALESCE(c.id, 0), COALESCE(c.name, ''), r.type, SUM(r.amount)
 		FROM records r
-		LEFT JOIN categories c ON r.category_id = c.id
+		LEFT JOIN categories c ON r."categoryID" = c.id
 		WHERE r.date >= ? AND r.date <= ?
 	`
 	detailArgs := []interface{}{from, to}
@@ -227,8 +227,8 @@ func (h *Handler) GetSummary(c *gin.Context) {
 
 	slog.Info("Summary retrieved successfully",
 		"from", from, "to", to,
-		"total_income", totalIncome,
-		"total_expense", totalExpense,
+		"totalIncome", totalIncome,
+		"totalExpense", totalExpense,
 	)
 
 	c.JSON(http.StatusOK, gin.H{"summary": summary})
