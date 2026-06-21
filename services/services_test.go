@@ -361,11 +361,15 @@ func TestGetSummary_DbError(t *testing.T) {
 	svc := NewRecordService(db)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // Cancel the context immediately
+	cancel()
 
 	_, err := svc.GetSummary(ctx, "2024-01-01", "2024-01-31", "", "")
 	if err == nil {
-		t.Error("expected error, got nil")
+		t.Fatal("expected error, got nil")
+	}
+
+	if !errors.Is(err, context.Canceled) && !isAppErrorType(err, "database") {
+		t.Errorf("expected context.Canceled or database AppError, got %v", err)
 	}
 }
 
@@ -440,11 +444,15 @@ func TestUpdateSummary_DbError(t *testing.T) {
 	svc := NewRecordService(db)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // Cancel the context immediately
+	cancel()
 
 	err := svc.UpdateSummary(ctx)
 	if err == nil {
-		t.Error("expected error, got nil")
+		t.Fatal("expected error, got nil")
+	}
+
+	if !errors.Is(err, context.Canceled) && !isAppErrorType(err, "database") {
+		t.Errorf("expected context.Canceled or database AppError, got %v", err)
 	}
 }
 
@@ -452,36 +460,45 @@ func TestUpdateSummary_Errors(t *testing.T) {
 	t.Run("failed to clear summary", func(t *testing.T) {
 		db := setupTestDB(t)
 		svc := NewRecordService(db)
-		if _, err := db.Exec("DROP TABLE summary"); err != nil {
-			t.Fatalf("failed to drop summary table: %v", err)
-		}
+
+		_, _ = db.Exec("DROP TABLE summary")
+
 		err := svc.UpdateSummary(context.Background())
 		if err == nil {
-			t.Error("expected error when summary table is missing")
+			t.Fatal("expected error when summary table is missing")
+		}
+		if !isAppErrorType(err, "database") {
+			t.Errorf("expected database error for summary clear failure, got %T: %v", err, err)
 		}
 	})
 
 	t.Run("failed to clear summary_details", func(t *testing.T) {
 		db := setupTestDB(t)
 		svc := NewRecordService(db)
-		if _, err := db.Exec("DROP TABLE summary_details"); err != nil {
-			t.Fatalf("failed to drop summary_details table: %v", err)
-		}
+
+		_, _ = db.Exec("DROP TABLE summary_details")
+
 		err := svc.UpdateSummary(context.Background())
 		if err == nil {
-			t.Error("expected error when summary_details table is missing")
+			t.Fatal("expected error when summary_details table is missing")
+		}
+		if !isAppErrorType(err, "database") {
+			t.Errorf("expected database error for summary_details clear failure, got %T: %v", err, err)
 		}
 	})
 
 	t.Run("failed to get min month", func(t *testing.T) {
 		db := setupTestDB(t)
 		svc := NewRecordService(db)
-		if _, err := db.Exec("DROP TABLE records"); err != nil {
-			t.Fatalf("failed to drop records table: %v", err)
-		}
+
+		_, _ = db.Exec("DROP TABLE records")
+
 		err := svc.UpdateSummary(context.Background())
 		if err == nil {
-			t.Error("expected error when records table is missing")
+			t.Fatal("expected error when records table is missing")
+		}
+		if !isAppErrorType(err, "database") {
+			t.Errorf("expected database error for records query failure, got %T: %v", err, err)
 		}
 	})
 }

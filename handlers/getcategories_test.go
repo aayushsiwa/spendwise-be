@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -57,7 +58,7 @@ func TestGetCategories(t *testing.T) {
 			t.Parallel()
 			w := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(w)
-			c.Request = httptest.NewRequest(http.MethodGet, "/categories", nil)
+			c.Request = httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/categories", nil)
 
 			svc := tt.mock
 			if svc == nil {

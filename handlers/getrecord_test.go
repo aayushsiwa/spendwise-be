@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -73,7 +74,7 @@ func TestGetRecord(t *testing.T) {
 			w := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(w)
 			id := tt.params.ByName("id")
-			c.Request = httptest.NewRequest(http.MethodGet, "/records/"+id, nil)
+			c.Request = httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/records/"+id, nil)
 			c.Params = tt.params
 
 			svc := tt.mock
