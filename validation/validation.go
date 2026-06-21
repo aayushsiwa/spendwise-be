@@ -22,6 +22,26 @@ func NewValidator() *Validator {
 	}
 }
 
+// ValidatePatchRecord validates only the fields present in a partial update request
+func (v *Validator) ValidatePatchRecord(req *models.UpdateRecordRequest) errors.ValidationErrors {
+	v.errors = make(errors.ValidationErrors, 0)
+
+	if req.Date != nil {
+		v.dateFormat("date", *req.Date, "Date must be in YYYY-MM-DD format")
+	}
+	if req.Amount != nil {
+		v.positiveNumber("amount", *req.Amount, "Amount must be a positive number")
+	}
+	if req.Description != nil {
+		v.maxLength("description", *req.Description, 255, "Description must be 255 characters or less")
+	}
+	if req.Note != nil {
+		v.maxLength("note", *req.Note, 1000, "Note must be 1000 characters or less")
+	}
+
+	return v.errors
+}
+
 // ValidateRecord validates a record model
 func (v *Validator) ValidateRecord(record *models.Record) errors.ValidationErrors {
 	v.errors = make(errors.ValidationErrors, 0)

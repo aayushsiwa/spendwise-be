@@ -1,9 +1,6 @@
 package handlers
 
 import (
-	"aayushsiwa/expense-tracker/errors"
-	"aayushsiwa/expense-tracker/models"
-	"aayushsiwa/expense-tracker/validation"
 	"database/sql"
 	"fmt"
 	"log/slog"
@@ -21,7 +18,6 @@ func (h *Handler) PatchRecord(c *gin.Context) {
 	ctx := c.Request.Context()
 	idStr := c.Param("id")
 
-	// Validate ID parameter
 	validator := validation.NewValidator()
 	id, validationErrs := validator.ValidateRecordID(idStr)
 	if len(validationErrs) > 0 {
@@ -41,32 +37,69 @@ func (h *Handler) PatchRecord(c *gin.Context) {
 		return
 	}
 
-	// Validate record data
-	validationErrs = validator.ValidateRecord(&rec)
+	var req models.UpdateRecordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		errors.HandleError(c, errors.NewInvalidInput("Invalid JSON body", err))
+		return
+	}
+
+	validationErrs = validator.ValidatePatchRecord(&req)
 	if len(validationErrs) > 0 {
 		errors.HandleValidationErrors(c, validationErrs)
 		return
 	}
 
-	// Get category ID
-	var categoryId int
-	err := h.DB.QueryRow("SELECT id FROM categories WHERE name = ?", rec.Category).Scan(&categoryId)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			appErr := errors.NewInvalidInput("Category not found", err).WithDetails(map[string]interface{}{
-				"category": rec.Category,
-			})
-			errors.HandleError(c, appErr)
-		} else {
-			appErr := errors.NewDatabase("Failed to find category", err)
-			errors.HandleError(c, appErr)
+	var setClauses []string
+	var args []any
+
+	if req.Date != nil {
+		setClauses = append(setClauses, "date = ?")
+		args = append(args, *req.Date)
+	}
+	if req.Description != nil {
+		setClauses = append(setClauses, "description = ?")
+		args = append(args, *req.Description)
+	}
+	if req.Amount != nil {
+		setClauses = append(setClauses, "amount = ?")
+		args = append(args, *req.Amount)
+	}
+	if req.Type != nil {
+		setClauses = append(setClauses, "type = ?")
+		args = append(args, *req.Type)
+	}
+	if req.Note != nil {
+		setClauses = append(setClauses, "note = ?")
+		args = append(args, *req.Note)
+	}
+	if req.Category != nil {
+		var categoryID int
+		err := h.DB.QueryRow("SELECT id FROM categories WHERE name = ?", *req.Category).Scan(&categoryID)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				appErr := errors.NewInvalidInput("Category not found", err).WithDetails(map[string]any{
+					"category": *req.Category,
+				})
+				errors.HandleError(c, appErr)
+			} else {
+				errors.HandleError(c, errors.NewDatabase("Failed to find category", err))
+			}
+			return
 		}
+		setClauses = append(setClauses, `"categoryID" = ?`)
+		args = append(args, categoryID)
+	}
+
+	if len(setClauses) == 0 {
+		slog.Info("No fields to update, returning success (idempotent)", "record_id", id)
+		c.JSON(http.StatusOK, gin.H{"message": "No fields to update", "ID": id})
 		return
 	}
 
-	// Check if record exists
-	var exists int
-	err = h.DB.QueryRow("SELECT COUNT(*) FROM records WHERE id = ?", id).Scan(&exists)
+	query := fmt.Sprintf("UPDATE records SET %s WHERE id = ?", strings.Join(setClauses, ", "))
+	args = append(args, id)
+
+	_, err = h.DB.Exec(query, args...)
 	if err != nil {
 		errors.HandleError(c, errors.NewDatabase("Failed to update record", err))
 		return
