@@ -1,11 +1,9 @@
 package handlers
 
 import (
-	"aayushsiwa/expense-tracker/models"
-	"aayushsiwa/expense-tracker/services"
-	"reflect"
 	"testing"
 
+	"aayushsiwa/expense-tracker/services"
 	"github.com/gin-gonic/gin"
 )
 
@@ -29,31 +27,6 @@ func TestHandler_GetRecords(t *testing.T) {
 				Service: tt.fields.Service,
 			}
 			h.GetRecords(tt.args.c)
-		})
-	}
-}
-
-func Test_buildWhereClause(t *testing.T) {
-	type args struct {
-		q *models.QueryParams
-	}
-	tests := []struct {
-		name  string
-		args  args
-		want  string
-		want1 []any
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, got1 := buildWhereClause(tt.args.q)
-			if got != tt.want {
-				t.Errorf("buildWhereClause() got = %v, want %v", got, tt.want)
-			}
-			if !reflect.DeepEqual(got1, tt.want1) {
-				t.Errorf("buildWhereClause() got1 = %v, want %v", got1, tt.want1)
-			}
 		})
 	}
 }

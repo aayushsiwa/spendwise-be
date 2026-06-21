@@ -3,7 +3,6 @@ package handlers
 import (
 	"log/slog"
 	"net/http"
-	"strings"
 
 	"aayushsiwa/expense-tracker/errors"
 	"aayushsiwa/expense-tracker/models"
@@ -25,11 +24,8 @@ func (h *Handler) GetRecords(c *gin.Context) {
 		return
 	}
 
-	offset := (queryParams.Page - 1) * queryParams.Limit
-	whereClause, filterArgs := buildWhereClause(queryParams)
-
 	if queryParams.GroupBy != "" {
-		groups, err := h.Service.GetGroupedRecords(c.Request.Context(), queryParams.GroupBy, whereClause, filterArgs)
+		groups, err := h.Service.GetGroupedRecords(c.Request.Context(), queryParams)
 		if err != nil {
 			errors.HandleError(c, err)
 			return
@@ -38,7 +34,7 @@ func (h *Handler) GetRecords(c *gin.Context) {
 		return
 	}
 
-	records, totalCount, err := h.Service.GetRecords(c.Request.Context(), whereClause, filterArgs, queryParams.Limit, offset)
+	records, totalCount, err := h.Service.GetRecords(c.Request.Context(), queryParams)
 	if err != nil {
 		errors.HandleError(c, err)
 		return
@@ -53,7 +49,6 @@ func (h *Handler) GetRecords(c *gin.Context) {
 
 	slog.Info("Records retrieved successfully",
 		"count", len(records),
-		"filtersApplied", whereClause != "",
 		"page", queryParams.Page,
 		"limit", queryParams.Limit,
 		"totalCount", totalCount,
@@ -73,44 +68,4 @@ func (h *Handler) GetRecords(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, res)
-}
-
-func buildWhereClause(q *models.QueryParams) (string, []any) {
-	filters := make([]string, 0, 5)
-	args := make([]any, 0, 5)
-
-	if q.Type != "" {
-		filters = append(filters, "r.type = ?")
-		args = append(args, q.Type)
-	}
-	if q.Category != "" {
-		filters = append(filters, "c.name = ?")
-		args = append(args, q.Category)
-	}
-	if q.From != "" {
-		filters = append(filters, "r.date >= ?")
-		args = append(args, q.From)
-	}
-	if q.To != "" {
-		filters = append(filters, "r.date <= ?")
-		args = append(args, q.To)
-	}
-	if q.MinAmount != 0 {
-		filters = append(filters, "r.amount >= ?")
-		args = append(args, q.MinAmount)
-	}
-	if q.MaxAmount != 0 {
-		filters = append(filters, "r.amount <= ?")
-		args = append(args, q.MaxAmount)
-	}
-	if q.Search != "" {
-		filters = append(filters, "LOWER(r.description) LIKE ?")
-		args = append(args, "%"+strings.ToLower(q.Search)+"%")
-	}
-
-	if len(filters) == 0 {
-		return "", args
-	}
-
-	return " WHERE " + strings.Join(filters, " AND "), args
 }

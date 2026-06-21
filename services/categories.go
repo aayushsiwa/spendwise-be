@@ -12,7 +12,7 @@ import (
 )
 
 func (s *RecordService) CreateCategories(ctx context.Context, categories []models.Category) ([]models.Category, error) {
-	tx, err := s.db.Begin()
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, errors.NewDatabase("Failed to begin transaction", err)
 	}
@@ -94,7 +94,7 @@ func (s *RecordService) UpdateCategory(ctx context.Context, id string, cat *mode
 	}
 
 	_, err = s.db.ExecContext(ctx, `UPDATE categories SET name = ?, icon = ?, color = ? WHERE "ID" = ?`,
-		cat.Name, cat.Icon, cat.Color, id)
+		strings.ToLower(cat.Name), cat.Icon, cat.Color, id)
 	if err != nil {
 		return errors.NewDatabase("Failed to update category", err)
 	}

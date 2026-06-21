@@ -1,8 +1,11 @@
 package handlers
 
 import (
-	"log/slog"
+	"errors"
 	"net/http"
+
+	apperrors "aayushsiwa/expense-tracker/errors"
+	"aayushsiwa/expense-tracker/services"
 
 	"github.com/gin-gonic/gin"
 )
@@ -28,8 +31,11 @@ func (h *Handler) ImportCSV(c *gin.Context) {
 
 	imported, skipped, err := h.Service.ImportCSV(c.Request.Context(), file)
 	if err != nil {
-		slog.ErrorContext(c.Request.Context(), "CSV import failed", slog.Any("error", err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "CSV import failed"})
+		if errors.Is(err, services.ErrImportValidation) {
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+			return
+		}
+		apperrors.HandleError(c, err)
 		return
 	}
 

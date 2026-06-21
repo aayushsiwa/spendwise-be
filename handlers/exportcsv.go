@@ -2,8 +2,9 @@ package handlers
 
 import (
 	"encoding/csv"
-	"net/http"
 	"strconv"
+
+	"aayushsiwa/expense-tracker/errors"
 
 	"github.com/gin-gonic/gin"
 )
@@ -11,12 +12,11 @@ import (
 func (h *Handler) ExportCSV(c *gin.Context) {
 	download := c.Query("download") == "true"
 
-	rows, err := h.Service.ExportRecords(c.Request.Context())
+	records, err := h.Service.ExportRecords(c.Request.Context())
 	if err != nil {
-		c.String(http.StatusInternalServerError, "Error querying records")
+		errors.HandleError(c, err)
 		return
 	}
-	defer func() { _ = rows.Close() }()
 
 	if download {
 		c.Header("Content-Type", "text/csv")
@@ -29,16 +29,11 @@ func (h *Handler) ExportCSV(c *gin.Context) {
 	writer := csv.NewWriter(c.Writer)
 	_ = writer.Write([]string{"Date", "Description", "Category", "Amount", "Type", "Note"})
 
-	for rows.Next() {
-		var date, desc, category, typ, note string
-		var amt float64
-
-		if err := rows.Scan(&date, &desc, &category, &amt, &typ, &note); err != nil {
-			continue
-		}
-
+	for _, rec := range records {
 		if !download {
-			line := date + "," + desc + "," + category + "," + strconv.FormatFloat(amt, 'f', 2, 64) + "," + typ + "," + note + "\n"
+			line := rec.Date + "," + rec.Description + "," + rec.Category + "," +
+				strconv.FormatFloat(rec.Amount, 'f', 2, 64) + "," +
+				string(rec.Type) + "," + rec.Note + "\n"
 			if _, err := c.Writer.Write([]byte(line)); err != nil {
 				return
 			}
@@ -46,12 +41,12 @@ func (h *Handler) ExportCSV(c *gin.Context) {
 		}
 
 		_ = writer.Write([]string{
-			date,
-			desc,
-			category,
-			strconv.FormatFloat(amt, 'f', 2, 64),
-			typ,
-			note,
+			rec.Date,
+			rec.Description,
+			rec.Category,
+			strconv.FormatFloat(rec.Amount, 'f', 2, 64),
+			string(rec.Type),
+			rec.Note,
 		})
 	}
 
