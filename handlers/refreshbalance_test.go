@@ -2,15 +2,20 @@ package handlers
 
 import (
 	"context"
-	"database/sql"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
+
+	"aayushsiwa/expense-tracker/services"
 
 	"github.com/gin-gonic/gin"
 )
 
 func TestHandler_RecalculateBalances(t *testing.T) {
 	type fields struct {
-		DB *sql.DB
+		Service services.Service
 	}
 	type args struct {
 		c *gin.Context
@@ -25,37 +30,55 @@ func TestHandler_RecalculateBalances(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			h := &Handler{
-				DB: tt.fields.DB,
+				Service: tt.fields.Service,
 			}
 			h.RecalculateBalances(tt.args.c)
 		})
 	}
 }
 
-func TestHandler_recalculateBalances(t *testing.T) {
-	type fields struct {
-		DB *sql.DB
+func TestRecalculateBalances_ServiceError(t *testing.T) {
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/refresh-balance", nil)
+
+	svc := &mockService{
+		refreshBalancesFn: func(_ context.Context) error {
+			return fmt.Errorf("database failure")
+		},
 	}
-	type args struct {
-		ctx context.Context
-		tx  *sql.Tx
+	h := &Handler{Service: svc}
+	h.RecalculateBalances(c)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500, got %d", w.Code)
 	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		wantErr bool
-	}{
-		// TODO: Add test cases.
+	var resp map[string]any
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp["error"] != "Internal Server Error" {
+		t.Errorf("expected 'Internal Server Error', got %v", resp["error"])
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			h := &Handler{
-				DB: tt.fields.DB,
-			}
-			if err := h.recalculateBalances(tt.args.ctx, tt.args.tx); (err != nil) != tt.wantErr {
-				t.Errorf("recalculateBalances() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
+}
+
+func TestRecalculateBalances_Success(t *testing.T) {
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/refresh-balance", nil)
+
+	svc := &mockService{
+		refreshBalancesFn: func(_ context.Context) error {
+			return nil
+		},
+	}
+	h := &Handler{Service: svc}
+	h.RecalculateBalances(c)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+	var resp map[string]any
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp["status"] != "Balances recalculated successfully" {
+		t.Errorf("expected success status message, got %v", resp["status"])
 	}
 }
