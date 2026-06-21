@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"aayushsiwa/expense-tracker/models"
-	"database/sql"
+	"aayushsiwa/expense-tracker/services"
 	"reflect"
 	"testing"
 
@@ -11,7 +11,7 @@ import (
 
 func TestHandler_GetRecords(t *testing.T) {
 	type fields struct {
-		DB *sql.DB
+		Service services.Service
 	}
 	type args struct {
 		c *gin.Context
@@ -26,7 +26,7 @@ func TestHandler_GetRecords(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			h := &Handler{
-				DB: tt.fields.DB,
+				Service: tt.fields.Service,
 			}
 			h.GetRecords(tt.args.c)
 		})

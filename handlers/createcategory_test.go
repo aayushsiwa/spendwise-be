@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"database/sql"
+	"aayushsiwa/expense-tracker/services"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -9,7 +9,7 @@ import (
 
 func TestHandler_CreateCategories(t *testing.T) {
 	type fields struct {
-		DB *sql.DB
+		Service services.Service
 	}
 	type args struct {
 		c *gin.Context
@@ -24,7 +24,7 @@ func TestHandler_CreateCategories(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			h := &Handler{
-				DB: tt.fields.DB,
+				Service: tt.fields.Service,
 			}
 			h.CreateCategories(tt.args.c)
 		})

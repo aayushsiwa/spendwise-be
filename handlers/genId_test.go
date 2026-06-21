@@ -1,13 +1,13 @@
 package handlers
 
 import (
-	"database/sql"
+	"aayushsiwa/expense-tracker/services"
 	"testing"
 )
 
 func TestHandler_GenerateCustomID(t *testing.T) {
 	type fields struct {
-		DB *sql.DB
+		Service services.Service
 	}
 	type args struct {
 		date string
@@ -24,7 +24,7 @@ func TestHandler_GenerateCustomID(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			h := &Handler{
-				DB: tt.fields.DB,
+				Service: tt.fields.Service,
 			}
 			got, err := h.GenerateCustomID(tt.args.date)
 			if (err != nil) != tt.wantErr {
