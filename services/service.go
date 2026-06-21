@@ -1,0 +1,41 @@
+package services
+
+import (
+	"context"
+	"database/sql"
+	"io"
+
+	"aayushsiwa/expense-tracker/models"
+)
+
+type Service interface {
+	CreateRecord(ctx context.Context, rec *models.Record) error
+	GetRecord(ctx context.Context, id string) (*models.Record, error)
+	GetRecords(ctx context.Context, whereClause string, filterArgs []any, limit, offset int) ([]models.Record, int, error)
+	GetGroupedRecords(ctx context.Context, groupBy, whereClause string, filterArgs []any) ([]models.GroupedRecord, error)
+	PatchRecord(ctx context.Context, id string, req *models.UpdateRecordRequest) error
+	DeleteRecord(ctx context.Context, id string) (int64, error)
+
+	ExportRecords(ctx context.Context) (*sql.Rows, error)
+
+	ImportCSV(ctx context.Context, src io.Reader) (imported, skipped int, err error)
+	ImportJSON(ctx context.Context, records []models.Record) (imported int, err error)
+
+	RefreshBalances(ctx context.Context) error
+
+	UpdateSummary(ctx context.Context) error
+	GetSummary(ctx context.Context, from, to, categoryFilter, typeFilter string) (*models.Summary, error)
+
+	CreateCategories(ctx context.Context, categories []models.Category) ([]models.Category, error)
+	GetCategories(ctx context.Context) ([]models.Category, error)
+	UpdateCategory(ctx context.Context, id string, cat *models.Category) error
+	DeleteCategory(ctx context.Context, id string) error
+}
+
+type RecordService struct {
+	db *sql.DB
+}
+
+func NewRecordService(db *sql.DB) *RecordService {
+	return &RecordService{db: db}
+}
