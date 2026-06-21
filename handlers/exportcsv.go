@@ -11,74 +11,54 @@ import (
 func (h *Handler) ExportCSV(c *gin.Context) {
 	download := c.Query("download") == "true"
 
-	rows, err := h.DB.Query("SELECT date, description, category_id, amount, type, note FROM records ORDER BY date DESC")
+	rows, err := h.DB.Query(`
+		SELECT r.date, r.description, COALESCE(c.name, ''), r.amount, r.type, r.note
+		FROM records r
+		LEFT JOIN categories c ON r."categoryID" = c.id
+		ORDER BY r.date DESC
+	`)
 	if err != nil {
 		c.String(http.StatusInternalServerError, "Error querying records")
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	if download {
 		c.Header("Content-Type", "text/csv")
 		c.Header("Content-Disposition", "attachment; filename=records.csv")
-		writer := csv.NewWriter(c.Writer)
-		_ = writer.Write([]string{"Date", "Description", "Category", "Amount", "Type", "Note"})
-
-		for rows.Next() {
-			var date, desc, cat, typ, note string
-			var amt float64
-
-			if err := rows.Scan(&date, &desc, &cat, &amt, &typ, &note); err != nil {
-				continue
-			}
-
-			var categoryName string
-			err := h.DB.QueryRow("SELECT name FROM categories WHERE id = ?", cat).Scan(&categoryName)
-			if err != nil {
-				c.String(http.StatusInternalServerError, "Error querying categories")
-				return
-			}
-
-			record := []string{
-				date,
-				desc,
-				categoryName,
-				strconv.FormatFloat(amt, 'f', 2, 64),
-				typ,
-				note,
-			}
-			_ = writer.Write(record)
-		}
-
-		writer.Flush()
 	} else {
 		c.Header("Content-Type", "text/plain; charset=utf-8")
 		c.Header("Content-Disposition", "inline; filename=records.txt")
-
-		if _, err := c.Writer.Write([]byte("Date,Description,Category,Amount,Type,Note\n")); err != nil {
-			c.String(http.StatusInternalServerError, "Error writing CSV header")
-			return
-		}
-
-		for rows.Next() {
-			var date, desc, cat, typ, note string
-			var amt float64
-
-			if err := rows.Scan(&date, &desc, &cat, &amt, &typ, &note); err != nil {
-				continue
-			}
-			var categoryName string
-			err := h.DB.QueryRow("SELECT name FROM categories WHERE id = ?", cat).Scan(&categoryName)
-			if err != nil {
-				c.String(http.StatusInternalServerError, "Error querying categories")
-				return
-			}
-
-			line := date + "," + desc + "," + categoryName + "," + strconv.FormatFloat(amt, 'f', 2, 64) + "," + typ + "," + note + "\n"
-			if _, err := c.Writer.Write([]byte(line)); err != nil {
-				c.String(http.StatusInternalServerError, "Error writing CSV line")
-				return
-			}
-		}
 	}
+
+	writer := csv.NewWriter(c.Writer)
+	_ = writer.Write([]string{"Date", "Description", "Category", "Amount", "Type", "Note"})
+
+	for rows.Next() {
+		var date, desc, category, typ, note string
+		var amt float64
+
+		if err := rows.Scan(&date, &desc, &category, &amt, &typ, &note); err != nil {
+			continue
+		}
+
+		if !download {
+			line := date + "," + desc + "," + category + "," + strconv.FormatFloat(amt, 'f', 2, 64) + "," + typ + "," + note + "\n"
+			if _, err := c.Writer.Write([]byte(line)); err != nil {
+				return
+			}
+			continue
+		}
+
+		_ = writer.Write([]string{
+			date,
+			desc,
+			category,
+			strconv.FormatFloat(amt, 'f', 2, 64),
+			typ,
+			note,
+		})
+	}
+
+	writer.Flush()
 }

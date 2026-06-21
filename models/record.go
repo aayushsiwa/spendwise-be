@@ -5,11 +5,11 @@ type RecordType string
 const (
 	Income   RecordType = "income"
 	Expense  RecordType = "expense"
-	Transfer RecordType = "transfer" // optional
+	Transfer RecordType = "transfer"
 )
 
 type Record struct {
-	ID          int        `json:"id"`
+	ID          string     `json:"ID"`
 	Date        string     `json:"date"`
 	Description string     `json:"description"`
 	Category    string     `json:"category"`
@@ -19,8 +19,17 @@ type Record struct {
 	Balance     float64    `json:"balance"`
 }
 
-type RecordsQueryParams struct {
-	PaginationFilterParams
-	BaseQueryParams
-	Search string `binding:"omitempty" form:"search" json:"search"`
+type RecordsResponse struct {
+	Records []Record `json:"records"`
+	PaginationMetadata
+}
+
+type GroupedRecord struct {
+	Group string  `json:"group"`
+	Total float64 `json:"total"`
+	Count int     `json:"count"`
+}
+
+type GroupedResponse struct {
+	Groups []GroupedRecord `json:"groups"`
 }

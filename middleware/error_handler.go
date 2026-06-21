@@ -13,7 +13,7 @@ import (
 
 // ErrorHandler middleware for centralized error handling
 func ErrorHandler() gin.HandlerFunc {
-	return gin.CustomRecovery(func(c *gin.Context, recovered interface{}) {
+	return gin.CustomRecovery(func(c *gin.Context, recovered any) {
 		if err, ok := recovered.(string); ok {
 			slog.Error("Panic recovered",
 				"error", err,

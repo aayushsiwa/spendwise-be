@@ -10,15 +10,15 @@ import (
 )
 
 func (h *Handler) GetCategories(c *gin.Context) {
-	rows, err := h.DB.Query("SELECT id, name, icon, color FROM categories ORDER BY name ASC")
+	rows, err := h.DB.Query(`SELECT "ID", name, icon, color FROM categories ORDER BY name ASC`)
 	if err != nil {
 		appErr := errors.NewDatabase("Failed to fetch categories", err)
 		errors.HandleError(c, appErr)
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
-	var categories []models.Category
+	categories := make([]models.Category, 0)
 	for rows.Next() {
 		var cat models.Category
 		if err := rows.Scan(&cat.ID, &cat.Name, &cat.Icon, &cat.Color); err != nil {

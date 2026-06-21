@@ -24,16 +24,16 @@ func (h *Handler) GetRecord(c *gin.Context) {
 	}
 
 	row := h.DB.QueryRow(`
-		SELECT r.id, r.date, r.description, c.name as category, r.amount, r.type, r.note
+		SELECT r.id, r.date, r.description, COALESCE(c.name, '') as category, r.amount, r.type, r.note, r.balance
 		FROM records r
-		JOIN categories c ON r.category_id = c.id
+		LEFT JOIN categories c ON r."categoryID" = c.id
 		WHERE r.id = ?
 	`, id)
 
 	var rec models.Record
-	if err := row.Scan(&rec.ID, &rec.Date, &rec.Description, &rec.Category, &rec.Amount, &rec.Type, &rec.Note); err != nil {
+	if err := row.Scan(&rec.ID, &rec.Date, &rec.Description, &rec.Category, &rec.Amount, &rec.Type, &rec.Note, &rec.Balance); err != nil {
 		if err == sql.ErrNoRows {
-			appErr := errors.NewNotFound(fmt.Sprintf("Record with ID %d not found", id), err)
+			appErr := errors.NewNotFound(fmt.Sprintf("Record with ID %s not found", id), err)
 			errors.HandleError(c, appErr)
 		} else {
 			appErr := errors.NewDatabase("Failed to read record", err)

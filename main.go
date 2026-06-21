@@ -66,7 +66,8 @@ func main() {
 	server.Use(middleware.ErrorHandler())    // Panic recovery
 	server.Use(middleware.SecurityHeaders()) // Security headers
 	// server.Use(middleware.RateLimiter())       // Rate limiting
-	server.Use(middleware.RequestLogger())          // Request logging
+	// server.Use(middleware.RequestLogger())          // Request logging
+	server.Use(gin.Logger())                        // Request logging
 	server.Use(middleware.ValidationErrorHandler()) // Validation error handling
 
 	// Log the Origin header for every request

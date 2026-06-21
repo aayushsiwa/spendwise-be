@@ -22,7 +22,7 @@ func (h *Handler) DeleteCategory(c *gin.Context) {
 
 	// Check if category exists
 	var exists int
-	err := h.DB.QueryRow("SELECT COUNT(*) FROM categories WHERE id = ?", id).Scan(&exists)
+	err := h.DB.QueryRow(`SELECT COUNT(*) FROM categories WHERE "ID" = ?`, id).Scan(&exists)
 	if err != nil {
 		appErr := errors.NewDatabase("Failed to check category existence", err)
 		errors.HandleError(c, appErr)
@@ -30,8 +30,8 @@ func (h *Handler) DeleteCategory(c *gin.Context) {
 	}
 
 	if exists == 0 {
-		appErr := errors.NewNotFound("Category not found", nil).WithDetails(map[string]interface{}{
-			"category_id": id,
+		appErr := errors.NewNotFound("Category not found", nil).WithDetails(map[string]any{
+			"categoryID": id,
 		})
 		errors.HandleError(c, appErr)
 		return
@@ -39,7 +39,7 @@ func (h *Handler) DeleteCategory(c *gin.Context) {
 
 	// Check if category is being used by any records
 	var recordCount int
-	err = h.DB.QueryRow("SELECT COUNT(*) FROM records WHERE category_id = ?", id).Scan(&recordCount)
+	err = h.DB.QueryRow(`SELECT COUNT(*) FROM records WHERE "categoryID" = ?`, id).Scan(&recordCount)
 	if err != nil {
 		appErr := errors.NewDatabase("Failed to check category usage", err)
 		errors.HandleError(c, appErr)
@@ -47,21 +47,21 @@ func (h *Handler) DeleteCategory(c *gin.Context) {
 	}
 
 	if recordCount > 0 {
-		appErr := errors.NewConflict("Cannot delete category that has associated records", nil).WithDetails(map[string]interface{}{
-			"category_id":  id,
-			"record_count": recordCount,
+		appErr := errors.NewConflict("Cannot delete category that has associated records", nil).WithDetails(map[string]any{
+			"categoryID":  id,
+			"recordCount": recordCount,
 		})
 		errors.HandleError(c, appErr)
 		return
 	}
 
-	_, err = h.DB.Exec("DELETE FROM categories WHERE id = ?", id)
+	_, err = h.DB.Exec(`DELETE FROM categories WHERE "ID" = ?`, id)
 	if err != nil {
 		appErr := errors.NewDatabase("Failed to delete category", err)
 		errors.HandleError(c, appErr)
 		return
 	}
 
-	slog.Info("Category deleted successfully", "category_id", id)
+	slog.Info("Category deleted successfully", "categoryID", id)
 	c.JSON(http.StatusNoContent, nil)
 }

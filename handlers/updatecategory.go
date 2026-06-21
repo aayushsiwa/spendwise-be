@@ -37,7 +37,7 @@ func (h *Handler) UpdateCategory(c *gin.Context) {
 
 	// Check if category exists
 	var exists int
-	err := h.DB.QueryRow("SELECT COUNT(*) FROM categories WHERE id = ?", id).Scan(&exists)
+	err := h.DB.QueryRow(`SELECT COUNT(*) FROM categories WHERE "ID" = ?`, id).Scan(&exists)
 	if err != nil {
 		appErr := errors.NewDatabase("Failed to check category existence", err)
 		errors.HandleError(c, appErr)
@@ -45,14 +45,14 @@ func (h *Handler) UpdateCategory(c *gin.Context) {
 	}
 
 	if exists == 0 {
-		appErr := errors.NewNotFound("Category not found", nil).WithDetails(map[string]interface{}{
-			"category_id": id,
+		appErr := errors.NewNotFound("Category not found", nil).WithDetails(map[string]any{
+			"categoryID": id,
 		})
 		errors.HandleError(c, appErr)
 		return
 	}
 
-	_, err = h.DB.Exec("UPDATE categories SET name = ?, icon = ?, color = ? WHERE id = ?",
+	_, err = h.DB.Exec(`UPDATE categories SET name = ?, icon = ?, color = ? WHERE "ID" = ?`,
 		cat.Name, cat.Icon, cat.Color, id)
 	if err != nil {
 		appErr := errors.NewDatabase("Failed to update category", err)
@@ -60,6 +60,6 @@ func (h *Handler) UpdateCategory(c *gin.Context) {
 		return
 	}
 
-	slog.Info("Category updated successfully", "category_id", id, "name", cat.Name)
-	c.JSON(http.StatusOK, gin.H{"id": id, "name": cat.Name, "icon": cat.Icon, "color": cat.Color})
+	slog.Info("Category updated successfully", "categoryID", id, "name", cat.Name)
+	c.JSON(http.StatusOK, gin.H{"ID": id, "name": cat.Name, "icon": cat.Icon, "color": cat.Color})
 }

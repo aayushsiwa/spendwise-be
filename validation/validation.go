@@ -2,7 +2,7 @@ package validation
 
 import (
 	"regexp"
-	"strconv"
+	"slices"
 	"strings"
 	"time"
 
@@ -20,6 +20,26 @@ func NewValidator() *Validator {
 	return &Validator{
 		errors: make(errors.ValidationErrors, 0),
 	}
+}
+
+// ValidatePatchRecord validates only the fields present in a partial update request
+func (v *Validator) ValidatePatchRecord(req *models.UpdateRecordRequest) errors.ValidationErrors {
+	v.errors = make(errors.ValidationErrors, 0)
+
+	if req.Date != nil {
+		v.dateFormat("date", *req.Date, "Date must be in YYYY-MM-DD format")
+	}
+	if req.Amount != nil {
+		v.positiveNumber("amount", *req.Amount, "Amount must be a positive number")
+	}
+	if req.Description != nil {
+		v.maxLength("description", *req.Description, 255, "Description must be 255 characters or less")
+	}
+	if req.Note != nil {
+		v.maxLength("note", *req.Note, 1000, "Note must be 1000 characters or less")
+	}
+
+	return v.errors
 }
 
 // ValidateRecord validates a record model
@@ -84,27 +104,16 @@ func (v *Validator) ValidateCategory(category *models.Category) errors.Validatio
 	return v.errors
 }
 
-// ValidateID validates an ID parameter
-func (v *Validator) ValidateID(idStr string) (int, errors.ValidationErrors) {
+// ValidateID validates a string ID parameter (records, categories, budgets)
+func (v *Validator) ValidateID(idStr string) (string, errors.ValidationErrors) {
 	v.errors = make(errors.ValidationErrors, 0)
 
 	if idStr == "" {
 		v.errors = append(v.errors, errors.NewValidationError("id", "ID is required", idStr))
-		return 0, v.errors
+		return "", v.errors
 	}
 
-	id, err := strconv.Atoi(idStr)
-	if err != nil {
-		v.errors = append(v.errors, errors.NewValidationError("id", "ID must be a valid integer", idStr))
-		return 0, v.errors
-	}
-
-	if id <= 0 {
-		v.errors = append(v.errors, errors.NewValidationError("id", "ID must be a positive integer", id))
-		return 0, v.errors
-	}
-
-	return id, v.errors
+	return idStr, v.errors
 }
 
 // Validation helper methods
@@ -133,10 +142,8 @@ func (v *Validator) positiveNumber(field string, value float64, message string) 
 }
 
 func (v *Validator) enum(field, value string, allowed []string, message string) {
-	for _, allowedValue := range allowed {
-		if value == allowedValue {
-			return
-		}
+	if slices.Contains(allowed, value) {
+		return
 	}
 	v.errors = append(v.errors, errors.NewValidationError(field, message, value))
 }
