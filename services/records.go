@@ -75,7 +75,7 @@ func (s *RecordService) GetRecord(ctx context.Context, id string) (*models.Recor
 	return &rec, nil
 }
 
-func buildWhereClause(q *models.QueryParams) (string, []any) {
+func BuildWhereClause(q *models.QueryParams) (string, []any) {
 	filters := make([]string, 0, 5)
 	args := make([]any, 0, 5)
 
@@ -116,7 +116,7 @@ func buildWhereClause(q *models.QueryParams) (string, []any) {
 }
 
 func (s *RecordService) GetRecords(ctx context.Context, params *models.QueryParams) ([]models.Record, int, error) {
-	whereClause, filterArgs := buildWhereClause(params)
+	whereClause, filterArgs := BuildWhereClause(params)
 	offset := (params.Page - 1) * params.Limit
 
 	selectQuery := `
@@ -168,7 +168,7 @@ func (s *RecordService) GetRecords(ctx context.Context, params *models.QueryPara
 }
 
 func (s *RecordService) GetGroupedRecords(ctx context.Context, params *models.QueryParams) ([]models.GroupedRecord, error) {
-	whereClause, filterArgs := buildWhereClause(params)
+	whereClause, filterArgs := BuildWhereClause(params)
 
 	var groupExpr, groupAlias string
 	switch params.GroupBy {
