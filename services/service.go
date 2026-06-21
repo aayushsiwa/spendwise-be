@@ -36,6 +36,7 @@ type RecordService struct {
 	db *sql.DB
 }
 
+// NewRecordService creates a new RecordService with the provided database connection.
 func NewRecordService(db *sql.DB) *RecordService {
 	return &RecordService{db: db}
 }

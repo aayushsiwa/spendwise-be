@@ -15,6 +15,8 @@ import (
 	"github.com/lithammer/shortuuid/v4"
 )
 
+// insertBatch inserts multiple record rows into the records table in a single INSERT statement.
+// If batch is empty, it returns nil immediately. All inserted rows have their balance field set to zero.
 func insertBatch(tx *sql.Tx, batch []recordRow) error {
 	if len(batch) == 0 {
 		return nil

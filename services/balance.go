@@ -32,6 +32,7 @@ func (s *RecordService) RefreshBalances(ctx context.Context) error {
 	return nil
 }
 
+// recalculateBalances updates all records' balance values to reflect cumulative running totals computed in chronological order.
 func recalculateBalances(ctx context.Context, tx *sql.Tx) error {
 	rows, err := tx.QueryContext(ctx, `
 		SELECT id, date, amount, type

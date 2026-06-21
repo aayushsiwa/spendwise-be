@@ -75,6 +75,7 @@ func (h *Handler) GetRecords(c *gin.Context) {
 	c.JSON(http.StatusOK, res)
 }
 
+// buildWhereClause constructs a SQL WHERE clause string and parameter arguments from the provided query parameters. It returns the clause (which may be empty if no filters apply) and a slice of corresponding parameter values for parameterized queries.
 func buildWhereClause(q *models.QueryParams) (string, []any) {
 	filters := make([]string, 0, 5)
 	args := make([]any, 0, 5)
