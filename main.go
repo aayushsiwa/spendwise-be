@@ -46,6 +46,7 @@ func init() {
 	slog.Info("Application initialized successfully")
 }
 
+// Main initializes and starts the Expense Tracker Server with graceful shutdown support.
 func main() {
 	slog.Info("Starting Expense Tracker Server...")
 
