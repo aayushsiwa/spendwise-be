@@ -23,3 +23,13 @@ type RecordsResponse struct {
 	Records []Record `json:"records"`
 	PaginationMetadata
 }
+
+type GroupedRecord struct {
+	Group string  `json:"group"`
+	Total float64 `json:"total"`
+	Count int     `json:"count"`
+}
+
+type GroupedResponse struct {
+	Groups []GroupedRecord `json:"groups"`
+}

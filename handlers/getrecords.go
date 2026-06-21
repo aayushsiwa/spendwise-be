@@ -3,6 +3,7 @@ package handlers
 import (
 	"aayushsiwa/expense-tracker/errors"
 	"aayushsiwa/expense-tracker/models"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -28,6 +29,12 @@ func (h *Handler) GetRecords(c *gin.Context) {
 
 	// Build WHERE clause and arguments once (reusable for select + count)
 	whereClause, filterArgs := buildWhereClause(queryParams)
+
+	// If groupBy is set, return grouped/aggregated data instead of individual records
+	if queryParams.GroupBy != "" {
+		h.getGroupedRecords(c, queryParams, whereClause, filterArgs)
+		return
+	}
 
 	// Base SELECT query
 	selectQuery := `
@@ -148,6 +155,14 @@ func buildWhereClause(q *models.QueryParams) (string, []any) {
 		filters = append(filters, "r.date <= ?")
 		args = append(args, q.To)
 	}
+	if q.MinAmount != 0 {
+		filters = append(filters, "r.amount >= ?")
+		args = append(args, q.MinAmount)
+	}
+	if q.MaxAmount != 0 {
+		filters = append(filters, "r.amount <= ?")
+		args = append(args, q.MaxAmount)
+	}
 	if q.Search != "" {
 		filters = append(filters, "LOWER(r.description) LIKE ?")
 		args = append(args, "%"+strings.ToLower(q.Search)+"%")
@@ -158,4 +173,48 @@ func buildWhereClause(q *models.QueryParams) (string, []any) {
 	}
 
 	return " WHERE " + strings.Join(filters, " AND "), args
+}
+
+func (h *Handler) getGroupedRecords(c *gin.Context, q *models.QueryParams, whereClause string, filterArgs []any) {
+	var groupExpr, groupAlias string
+	switch q.GroupBy {
+	case "category":
+		groupExpr = "COALESCE(c.name, '')"
+		groupAlias = "category"
+	case "month":
+		groupExpr = "strftime('%Y-%m', r.date)"
+		groupAlias = "month"
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid groupBy value"})
+		return
+	}
+
+	query := fmt.Sprintf(`
+		SELECT %s AS "%s", SUM(r.amount) AS total, COUNT(*) AS count
+		FROM records r
+		LEFT JOIN categories c ON r."categoryID" = c.id
+		%s
+		GROUP BY %s
+		ORDER BY total DESC
+	`, groupExpr, groupAlias, whereClause, groupExpr)
+
+	rows, err := h.DB.Query(query, filterArgs...)
+	if err != nil {
+		slog.Error("Failed to execute grouped query", "error", err)
+		errors.HandleError(c, errors.NewDatabase("Failed to retrieve grouped records", err))
+		return
+	}
+	defer func() { _ = rows.Close() }()
+
+	groups := make([]models.GroupedRecord, 0)
+	for rows.Next() {
+		var gr models.GroupedRecord
+		if err := rows.Scan(&gr.Group, &gr.Total, &gr.Count); err != nil {
+			slog.Error("Failed to scan grouped record", "error", err)
+			continue
+		}
+		groups = append(groups, gr)
+	}
+
+	c.JSON(http.StatusOK, models.GroupedResponse{Groups: groups})
 }

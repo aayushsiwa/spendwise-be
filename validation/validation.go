@@ -84,7 +84,19 @@ func (v *Validator) ValidateCategory(category *models.Category) errors.Validatio
 	return v.errors
 }
 
-// ValidateID validates an ID parameter
+// ValidateRecordID validates a record ID parameter (short UUID string)
+func (v *Validator) ValidateRecordID(idStr string) (string, errors.ValidationErrors) {
+	v.errors = make(errors.ValidationErrors, 0)
+
+	if idStr == "" {
+		v.errors = append(v.errors, errors.NewValidationError("id", "ID is required", idStr))
+		return "", v.errors
+	}
+
+	return idStr, v.errors
+}
+
+// ValidateID validates an integer ID parameter (for categories/budgets)
 func (v *Validator) ValidateID(idStr string) (int, errors.ValidationErrors) {
 	v.errors = make(errors.ValidationErrors, 0)
 
