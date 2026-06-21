@@ -22,7 +22,7 @@ func (h *Handler) ImportCSV(c *gin.Context) {
 		return
 	}
 
-	file, err := fileHeader.Open()
+	file, err := openFileFunc(fileHeader)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to open uploaded file"})
 		return
