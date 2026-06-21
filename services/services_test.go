@@ -11,6 +11,7 @@ import (
 
 	apperrors "aayushsiwa/expense-tracker/errors"
 	"aayushsiwa/expense-tracker/models"
+
 	"github.com/lithammer/shortuuid/v4"
 )
 
@@ -20,6 +21,8 @@ func setupTestDB(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatalf("failed to open in-memory db: %v", err)
 	}
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
 	t.Cleanup(func() { _ = db.Close() })
 
 	schema, err := os.ReadFile("../sql/init.sql")
@@ -225,7 +228,10 @@ func TestDeleteCategory_Conflict(t *testing.T) {
 	db := setupTestDB(t)
 	svc := NewRecordService(db)
 
-	cats, _ := svc.CreateCategories(context.Background(), []models.Category{{Name: "Food"}})
+	cats, err := svc.CreateCategories(context.Background(), []models.Category{{Name: "Food"}})
+	if err != nil {
+		t.Fatalf("CreateCategories setup failed: %v", err)
+	}
 	catID := cats[0].ID
 
 	if err := svc.CreateRecord(context.Background(), &models.Record{
@@ -235,7 +241,7 @@ func TestDeleteCategory_Conflict(t *testing.T) {
 		t.Fatalf("CreateRecord setup failed: %v", err)
 	}
 
-	err := svc.DeleteCategory(context.Background(), catID)
+	err = svc.DeleteCategory(context.Background(), catID)
 	if !isAppErrorType(err, "conflict") {
 		t.Fatalf("expected conflict, got %v", err)
 	}
@@ -446,7 +452,9 @@ func TestUpdateSummary_Errors(t *testing.T) {
 	t.Run("failed to clear summary", func(t *testing.T) {
 		db := setupTestDB(t)
 		svc := NewRecordService(db)
-		_, _ = db.Exec("DROP TABLE summary")
+		if _, err := db.Exec("DROP TABLE summary"); err != nil {
+			t.Fatalf("failed to drop summary table: %v", err)
+		}
 		err := svc.UpdateSummary(context.Background())
 		if err == nil {
 			t.Error("expected error when summary table is missing")
@@ -456,7 +464,9 @@ func TestUpdateSummary_Errors(t *testing.T) {
 	t.Run("failed to clear summary_details", func(t *testing.T) {
 		db := setupTestDB(t)
 		svc := NewRecordService(db)
-		_, _ = db.Exec("DROP TABLE summary_details")
+		if _, err := db.Exec("DROP TABLE summary_details"); err != nil {
+			t.Fatalf("failed to drop summary_details table: %v", err)
+		}
 		err := svc.UpdateSummary(context.Background())
 		if err == nil {
 			t.Error("expected error when summary_details table is missing")
@@ -466,7 +476,9 @@ func TestUpdateSummary_Errors(t *testing.T) {
 	t.Run("failed to get min month", func(t *testing.T) {
 		db := setupTestDB(t)
 		svc := NewRecordService(db)
-		_, _ = db.Exec("DROP TABLE records")
+		if _, err := db.Exec("DROP TABLE records"); err != nil {
+			t.Fatalf("failed to drop records table: %v", err)
+		}
 		err := svc.UpdateSummary(context.Background())
 		if err == nil {
 			t.Error("expected error when records table is missing")
@@ -490,8 +502,12 @@ func TestUpdateSummary_InsertErrors(t *testing.T) {
 		}
 
 		// Recreate summary with failing check constraint
-		_, _ = db.Exec("DROP TABLE summary")
-		_, _ = db.Exec("CREATE TABLE summary (month TEXT PRIMARY KEY CHECK (month = 'invalid'))")
+		if _, err := db.Exec("DROP TABLE summary"); err != nil {
+			t.Fatalf("failed to drop summary table: %v", err)
+		}
+		if _, err := db.Exec("CREATE TABLE summary (month TEXT PRIMARY KEY CHECK (month = 'invalid'))"); err != nil {
+			t.Fatalf("failed to create mock summary table: %v", err)
+		}
 
 		err := svc.UpdateSummary(context.Background())
 		if err == nil {
@@ -514,8 +530,12 @@ func TestUpdateSummary_InsertErrors(t *testing.T) {
 		}
 
 		// Recreate summary_details with failing check constraint
-		_, _ = db.Exec("DROP TABLE summary_details")
-		_, _ = db.Exec("CREATE TABLE summary_details (month TEXT, type TEXT, categoryID TEXT, categoryName TEXT, amount REAL, PRIMARY KEY (month, type, categoryID), CHECK (amount < 0))")
+		if _, err := db.Exec("DROP TABLE summary_details"); err != nil {
+			t.Fatalf("failed to drop summary_details table: %v", err)
+		}
+		if _, err := db.Exec("CREATE TABLE summary_details (month TEXT, type TEXT, categoryID TEXT, categoryName TEXT, amount REAL, PRIMARY KEY (month, type, categoryID), CHECK (amount < 0))"); err != nil {
+			t.Fatalf("failed to create mock summary_details table: %v", err)
+		}
 
 		err := svc.UpdateSummary(context.Background())
 		if err == nil {
