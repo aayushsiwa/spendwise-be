@@ -9,8 +9,10 @@ IMAGE_NAME        := expense-backend
 CONTAINER_PORT    := 8080
 HOST_PORT         := 8080
 
+MIN_COVERAGE := 56
+
 # --- Targets ---
-.PHONY: all migrationup migrationdown clean dev build docker run docker-clean push help
+.PHONY: all migrationup migrationdown clean dev build docker run docker-clean push coverage help
 
 ## Run full setup: clean, migrate, build docker image, and run container
 all: run
@@ -81,6 +83,70 @@ test: ## Run Go unit tests
 	go test ./...
 	@echo "✅ Tests passed"
 
+## Run tests with coverage
+coverage: ## Run tests with coverage and enforce minimum coverage
+	@echo "Running tests with coverage..."
+	@mkdir -p tmp
+	@go test -coverprofile=tmp/coverage.out -covermode=count ./...
+
+	@echo ""
+	@echo "--- Per-function coverage ---"
+	@go tool cover -func=tmp/coverage.out
+
+	@coverage=$$(go tool cover -func=tmp/coverage.out | awk '/total:/ {print substr($$3, 1, length($$3)-1)}'); \
+	echo ""; \
+	echo "Total coverage: $$coverage%"; \
+	if awk 'BEGIN { exit !('"$$coverage"' >= $(MIN_COVERAGE)) }'; then \
+		echo "✅ Coverage meets threshold ($(MIN_COVERAGE)%)"; \
+	else \
+		echo "❌ Coverage ($$coverage%) is below threshold ($(MIN_COVERAGE)%)"; \
+		exit 1; \
+	fi
+
+	@go tool cover -html=tmp/coverage.out -o tmp/coverage.html
+	@echo "📄 HTML report: tmp/coverage.html"
+
+## Run tests with coverage and open HTML report
+coverage-html: ## Generate HTML coverage report
+	@echo "Running tests with coverage..."
+	@mkdir -p tmp
+	go test -coverprofile=tmp/coverage.out -covermode=count ./...
+	go tool cover -html=tmp/coverage.out -o tmp/coverage.html
+	@echo "✅ HTML coverage report generated: tmp/coverage.html"
+
+	@# Open report automatically (Linux/macOS)
+	@if command -v xdg-open >/dev/null 2>&1; then \
+		xdg-open tmp/coverage.html; \
+	elif command -v open >/dev/null 2>&1; then \
+		open tmp/coverage.html; \
+	else \
+		echo "Open tmp/coverage.html in your browser"; \
+	fi
+
+coverage-check: ## Fail if coverage is below threshold
+	@go test -coverprofile=tmp/coverage.out -covermode=count ./...
+	@coverage=$$(go tool cover -func=tmp/coverage.out | awk '/total:/ {sub("%","",$$3); print $$3}'); \
+	if awk 'BEGIN { exit !('"$$coverage"' < $(MIN_COVERAGE)) }'; then \
+		echo "❌ Coverage $$coverage% is below $(MIN_COVERAGE)%"; \
+		exit 1; \
+	elif awk 'BEGIN { exit !('"$$coverage"' > $(MIN_COVERAGE)) }'; then \
+		echo "✅ Coverage is greater than $(MIN_COVERAGE)%: $$coverage%"; \
+		echo "Suggest increasing MIN_COVERAGE to $$coverage%"; \
+	else \
+		echo "✅ Coverage: $$coverage%"; \
+	fi
+
+## Run Go modernize
+modernize: ## Run Go modernize
+	@echo "Running Go modernize..."
+	go run golang.org/x/tools/gopls/internal/analysis/modernize/cmd/modernize@latest -fix ./...
+	@echo "✅ Modernize passed"
+
+lint: ## Run Go linter
+	@echo "Running Go linter..."
+	 golangci-lint run --fix ./...
+	@echo "✅ Linter passed"
+
 ## Run go vet and go fmt
 check: ## Run go vet and go fmt
 	@echo "Running go fmt..."
@@ -94,8 +160,9 @@ check: ## Run go vet and go fmt
 	go vet ./...
 	@echo "✅ Formatting and vetting passed"
 
+
 ## Run all checks before push
-pre-push: check test ## Run all pre-push checks (fmt, vet, test)
+pre-push: modernize lint check test coverage-check ## Run all pre-push checks (fmt, vet, test)
 	@echo "✅ Pre-push checks passed"
 
 ## Show help for all commands
