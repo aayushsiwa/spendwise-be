@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"aayushsiwa/expense-tracker/errors"
 	appErrors "aayushsiwa/expense-tracker/errors"
 	"aayushsiwa/expense-tracker/models"
 	"aayushsiwa/expense-tracker/validation"
@@ -34,7 +33,7 @@ func (h *Handler) PatchRecord(c *gin.Context) {
 	}
 
 	if err := h.Service.PatchRecord(c.Request.Context(), id, &req); err != nil {
-		errors.HandleError(c, err)
+		appErrors.HandleError(c, err)
 		return
 	}
 

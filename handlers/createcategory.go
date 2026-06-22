@@ -58,16 +58,6 @@ func (h *Handler) CreateCategories(c *gin.Context) {
 			"color": cat.Color,
 		})
 	}
-
-<<<<<<< HEAD
-	if err := tx.Commit().Error; err != nil {
-		appErr := errors.NewDatabase("Failed to commit transaction", err)
-		errors.HandleError(c, appErr)
-		return
-	}
-
-=======
->>>>>>> 0617a2afde94cf5b86ce3dd3494faae90d7b64cd
 	slog.Info("Categories created successfully", "count", len(inserted))
 	c.JSON(http.StatusCreated, insertedRes)
 }

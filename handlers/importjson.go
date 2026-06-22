@@ -25,7 +25,7 @@ func (h *Handler) ImportJSON(c *gin.Context) {
 	}
 
 	// Update summary
-	if err := h.UpdateSummary(); err != nil {
+	if err := h.Service.UpdateSummary(c.Request.Context()); err != nil {
 		slog.Warn("Failed to update summary after JSON import", "error", err)
 	}
 

@@ -4,13 +4,8 @@ import (
 	appErrors "aayushsiwa/expense-tracker/errors"
 	"aayushsiwa/expense-tracker/models"
 	"aayushsiwa/expense-tracker/validation"
-	"errors"
 	"log/slog"
 	"net/http"
-
-	"aayushsiwa/expense-tracker/errors"
-	"aayushsiwa/expense-tracker/models"
-	"aayushsiwa/expense-tracker/validation"
 
 	"github.com/gin-gonic/gin"
 )
@@ -40,7 +35,7 @@ func (h *Handler) CreateRecord(c *gin.Context) {
 	rec.ID = customId
 
 	if err := h.Service.CreateRecord(c.Request.Context(), &rec); err != nil {
-		errors.HandleError(c, err)
+		appErrors.HandleError(c, err)
 		return
 	}
 

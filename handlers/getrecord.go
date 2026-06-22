@@ -4,7 +4,6 @@ import (
 	"log/slog"
 	"net/http"
 
-	"aayushsiwa/expense-tracker/errors"
 	appErrors "aayushsiwa/expense-tracker/errors"
 	"aayushsiwa/expense-tracker/validation"
 
@@ -23,7 +22,7 @@ func (h *Handler) GetRecord(c *gin.Context) {
 
 	rec, err := h.Service.GetRecord(c.Request.Context(), id)
 	if err != nil {
-		errors.HandleError(c, err)
+		appErrors.HandleError(c, err)
 		return
 	}
 

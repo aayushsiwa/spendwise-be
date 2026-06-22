@@ -30,13 +30,3 @@ func (h *Handler) GetSummary(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"summary": summary})
 }
-<<<<<<< HEAD
-
-// nextMonth increments a YYYY-MM string by one month.
-// (same implementation as before)
-func nextMonth(m string) string {
-	t, _ := time.Parse("2006-01", m)
-	return t.AddDate(0, 1, 0).Format("2006-01")
-}
-=======
->>>>>>> 0617a2afde94cf5b86ce3dd3494faae90d7b64cd
