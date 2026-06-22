@@ -2,15 +2,15 @@ package handlers
 
 import (
 	"context"
-	"database/sql"
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 func TestHandler_RecalculateBalances(t *testing.T) {
 	type fields struct {
-		DB *sql.DB
+		DB *gorm.DB
 	}
 	type args struct {
 		c *gin.Context
@@ -34,11 +34,11 @@ func TestHandler_RecalculateBalances(t *testing.T) {
 
 func TestHandler_recalculateBalances(t *testing.T) {
 	type fields struct {
-		DB *sql.DB
+		DB *gorm.DB
 	}
 	type args struct {
 		ctx context.Context
-		tx  *sql.Tx
+		tx  *gorm.DB
 	}
 	tests := []struct {
 		name    string

@@ -1,13 +1,14 @@
 package handlers
 
 import (
-	"database/sql"
 	"testing"
+
+	"gorm.io/gorm"
 )
 
 func TestHandler_GenerateCustomID(t *testing.T) {
 	type fields struct {
-		DB *sql.DB
+		DB *gorm.DB
 	}
 	type args struct {
 		date string

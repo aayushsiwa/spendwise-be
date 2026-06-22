@@ -18,48 +18,48 @@ import (
 func (h *Handler) UpdateSummary() (err error) {
 	slog.Info("Updating summary...")
 
-	tx, err := h.DB.Begin()
-	if err != nil {
-		return errors.NewDatabase("Failed to begin transaction", err)
+	tx := h.DB.Begin()
+	if tx.Error != nil {
+		return errors.NewDatabase("Failed to begin transaction", tx.Error)
 	}
 
 	defer func() {
 		if err != nil {
-			_ = tx.Rollback()
+			tx.Rollback()
 		}
 	}()
 
-	if _, err = tx.Exec("DELETE FROM summary"); err != nil {
+	if err = tx.Exec("DELETE FROM summary").Error; err != nil {
 		return errors.NewDatabase("Failed to clear summary", err)
 	}
-	if _, err = tx.Exec("DELETE FROM summary_details"); err != nil {
+	if err = tx.Exec("DELETE FROM summary_details").Error; err != nil {
 		return errors.NewDatabase("Failed to clear summary_details", err)
 	}
 
 	var minMonth sql.NullString
-	if err = tx.QueryRow(`
-		SELECT MIN(strftime('%Y-%m', date))
+	if err = tx.Raw(`
+		SELECT MIN(SUBSTR(date, 1, 7))
 		FROM records
-	`).Scan(&minMonth); err != nil {
+	`).Scan(&minMonth).Error; err != nil {
 		return errors.NewDatabase("Failed to get min month", err)
 	}
 
 	if !minMonth.Valid {
 		slog.Info("No records found, summary will be empty")
-		return tx.Commit()
+		return tx.Commit().Error
 	}
 
 	maxMonth := time.Now().Format("2006-01")
 
-	rows, err := tx.Query(`
+	rows, err := tx.Raw(`
 		SELECT
-			strftime('%Y-%m', date) AS month,
+			SUBSTR(date, 1, 7) AS month,
 			SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) AS "totalIncome",
 			SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) AS "totalExpense"
 		FROM records
 		GROUP BY month
 		ORDER BY month ASC
-	`)
+	`).Rows()
 	if err != nil {
 		return errors.NewDatabase("Failed to aggregate records", err)
 	}
@@ -89,10 +89,10 @@ func (h *Handler) UpdateSummary() (err error) {
 		net := d.income - d.expense
 		closing := openingBalance + net
 
-		_, err = tx.Exec(`
+		err = tx.Exec(`
 			INSERT INTO summary (month, "totalIncome", "totalExpense", "openingBalance", "netBalance", "closingBalance")
 			VALUES (?, ?, ?, ?, ?, ?)
-		`, m, d.income, d.expense, openingBalance, net, closing)
+		`, m, d.income, d.expense, openingBalance, net, closing).Error
 		if err != nil {
 			return errors.NewDatabase("Failed to insert summary for month", err)
 		}
@@ -100,11 +100,11 @@ func (h *Handler) UpdateSummary() (err error) {
 		openingBalance = closing
 	}
 
-	_, err = tx.Exec(`
+	err = tx.Exec(`
 		INSERT INTO summary_details ("ID", month, type, "categoryID", "categoryName", amount)
 		SELECT
 			r.id,
-			strftime('%Y-%m', r.date) AS month,
+			SUBSTR(r.date, 1, 7) AS month,
 			r.type,
 			COALESCE(c."ID", '') AS "categoryID",
 			COALESCE(c.name, 'uncategorized') AS "categoryName",
@@ -112,13 +112,13 @@ func (h *Handler) UpdateSummary() (err error) {
 		FROM records r
 		LEFT JOIN categories c ON r."categoryID" = c."ID"
 		WHERE r.type IN ('income', 'expense', 'transfer')
-		GROUP BY month, r.type, COALESCE(c."ID", ''), COALESCE(c.name, 'uncategorized')
-	`)
+		GROUP BY r.id, month, r.type, COALESCE(c."ID", ''), COALESCE(c.name, 'uncategorized')
+	`).Error
 	if err != nil {
 		return errors.NewDatabase("Failed to insert summary details", err)
 	}
 
-	if err = tx.Commit(); err != nil {
+	if err = tx.Commit().Error; err != nil {
 		return errors.NewDatabase("Failed to commit summary transaction", err)
 	}
 
@@ -133,25 +133,25 @@ func (h *Handler) GetSummary(c *gin.Context) {
 	to := c.DefaultQuery("to", time.Now().Format("2006-01-02"))
 
 	var totalIncome, totalExpense float64
-	err := h.DB.QueryRow(`
+	err := h.DB.Raw(`
 		SELECT
 			COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0),
 			COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0)
 		FROM records WHERE date >= ? AND date <= ?
-	`, from, to).Scan(&totalIncome, &totalExpense)
+	`, from, to).Row().Scan(&totalIncome, &totalExpense)
 	if err != nil {
 		errors.HandleError(c, errors.NewDatabase("Failed to compute totals", err))
 		return
 	}
 
 	var openingBalance float64
-	err = h.DB.QueryRow(`
+	err = h.DB.Raw(`
 		SELECT COALESCE(SUM(
 			CASE WHEN type = 'income' THEN amount
 			     WHEN type = 'expense' THEN -amount
 			     ELSE 0 END
 		), 0) FROM records WHERE date < ?
-	`, from).Scan(&openingBalance)
+	`, from).Row().Scan(&openingBalance)
 	if err != nil {
 		errors.HandleError(c, errors.NewDatabase("Failed to compute opening balance", err))
 		return
@@ -184,9 +184,9 @@ func (h *Handler) GetSummary(c *gin.Context) {
 		detailQuery += " AND " + strings.Join(conditions, " AND ")
 	}
 
-	detailQuery += " GROUP BY c.id, r.type ORDER BY r.type, SUM(r.amount) DESC"
+	detailQuery += " GROUP BY c.id, c.name, r.type ORDER BY r.type, SUM(r.amount) DESC"
 
-	rows, err := h.DB.Query(detailQuery, detailArgs...)
+	rows, err := h.DB.Raw(detailQuery, detailArgs...).Rows()
 	if err != nil {
 		errors.HandleError(c, errors.NewDatabase("Failed to fetch category breakdown", err))
 		return
@@ -236,6 +236,7 @@ func (h *Handler) GetSummary(c *gin.Context) {
 }
 
 // nextMonth increments a YYYY-MM string by one month.
+// (same implementation as before)
 func nextMonth(m string) string {
 	t, _ := time.Parse("2006-01", m)
 	return t.AddDate(0, 1, 0).Format("2006-01")

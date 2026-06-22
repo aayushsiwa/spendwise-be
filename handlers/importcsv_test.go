@@ -1,15 +1,15 @@
 package handlers
 
 import (
-	"database/sql"
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 func TestHandler_ImportCSV(t *testing.T) {
 	type fields struct {
-		DB *sql.DB
+		DB *gorm.DB
 	}
 	type args struct {
 		c *gin.Context
@@ -53,7 +53,7 @@ func Test_abs(t *testing.T) {
 
 func Test_insertBatch(t *testing.T) {
 	type args struct {
-		tx    *sql.Tx
+		tx    *gorm.DB
 		batch []recordRow
 	}
 	tests := []struct {

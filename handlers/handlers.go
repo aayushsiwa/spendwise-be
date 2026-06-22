@@ -1,11 +1,11 @@
 package handlers
 
-import "database/sql"
+import "gorm.io/gorm"
 
 type Handler struct {
-	DB *sql.DB
+	DB *gorm.DB
 }
 
-func NewHandler(db *sql.DB) *Handler {
+func NewHandler(db *gorm.DB) *Handler {
 	return &Handler{DB: db}
 }

@@ -9,14 +9,19 @@ const (
 )
 
 type Record struct {
-	ID          string     `json:"ID"`
-	Date        string     `json:"date"`
-	Description string     `json:"description"`
-	Category    string     `json:"category"`
-	Amount      float64    `json:"amount"`
-	Type        RecordType `json:"type"`
-	Note        string     `json:"note"`
-	Balance     float64    `json:"balance"`
+	ID          string     `gorm:"primaryKey;column:ID" json:"ID"`
+	Date        string     `gorm:"column:date;not null" json:"date"`
+	Description string     `gorm:"column:description;not null" json:"description"`
+	CategoryID  *string    `gorm:"column:categoryID" json:"categoryID,omitempty"`
+	Category    string     `gorm:"-" json:"category"`
+	Amount      float64    `gorm:"column:amount;not null" json:"amount"`
+	Type        RecordType `gorm:"column:type;not null" json:"type"`
+	Note        string     `gorm:"column:note" json:"note"`
+	Balance     float64    `gorm:"column:balance;not null" json:"balance"`
+}
+
+func (Record) TableName() string {
+	return "records"
 }
 
 type RecordsResponse struct {

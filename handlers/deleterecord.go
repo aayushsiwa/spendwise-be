@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"aayushsiwa/expense-tracker/errors"
+	"aayushsiwa/expense-tracker/models"
 	"aayushsiwa/expense-tracker/validation"
 
 	"github.com/gin-gonic/gin"
@@ -22,21 +23,14 @@ func (h *Handler) DeleteRecord(c *gin.Context) {
 		return
 	}
 
-	res, err := h.DB.Exec(`DELETE FROM records WHERE id = ?`, id)
-	if err != nil {
-		appErr := errors.NewDatabase("Failed to delete record", err)
+	result := h.DB.Where("id = ?", id).Delete(&models.Record{})
+	if result.Error != nil {
+		appErr := errors.NewDatabase("Failed to delete record", result.Error)
 		errors.HandleError(c, appErr)
 		return
 	}
 
-	rowsAffected, err := res.RowsAffected()
-	if err != nil {
-		appErr := errors.NewDatabase("Failed to get affected rows", err)
-		errors.HandleError(c, appErr)
-		return
-	}
-
-	if rowsAffected == 0 {
+	if result.RowsAffected == 0 {
 		appErr := errors.NewNotFound(fmt.Sprintf("Record with ID %s not found", id), nil)
 		errors.HandleError(c, appErr)
 		return

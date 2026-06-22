@@ -21,3 +21,29 @@ type SummaryResponse struct {
 	Summaries map[string]Summary `json:"summaries"`
 	PaginationMetadata
 }
+
+type SummaryDB struct {
+	Month          string  `gorm:"primaryKey;column:month" json:"month"`
+	TotalIncome    float64 `gorm:"column:totalIncome;not null;default:0" json:"totalIncome"`
+	TotalExpense   float64 `gorm:"column:totalExpense;not null;default:0" json:"totalExpense"`
+	OpeningBalance float64 `gorm:"column:openingBalance;not null;default:0" json:"openingBalance"`
+	NetBalance     float64 `gorm:"column:netBalance;not null;default:0" json:"netBalance"`
+	ClosingBalance float64 `gorm:"column:closingBalance;not null;default:0" json:"closingBalance"`
+}
+
+func (SummaryDB) TableName() string {
+	return "summary"
+}
+
+type SummaryDetailDB struct {
+	ID           string  `gorm:"primaryKey;column:ID" json:"ID"`
+	Month        string  `gorm:"column:month;not null" json:"month"`
+	Type         string  `gorm:"column:type;not null" json:"type"`
+	CategoryID   string  `gorm:"column:categoryID;not null" json:"categoryID"`
+	CategoryName string  `gorm:"column:categoryName;not null" json:"categoryName"`
+	Amount       float64 `gorm:"column:amount;not null" json:"amount"`
+}
+
+func (SummaryDetailDB) TableName() string {
+	return "summary_details"
+}

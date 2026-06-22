@@ -46,23 +46,17 @@ func (h *Handler) CreateCategories(c *gin.Context) {
 		return
 	}
 
-	tx, err := h.DB.Begin()
-	if err != nil {
-		appErr := errors.NewDatabase("Failed to begin transaction", err)
+	tx := h.DB.Begin()
+	if tx.Error != nil {
+		appErr := errors.NewDatabase("Failed to begin transaction", tx.Error)
 		errors.HandleError(c, appErr)
 		return
 	}
-
-	stmt, err := tx.Prepare("INSERT INTO categories (id, name, icon, color) VALUES (?, ?, ?, ?)")
-	if err != nil {
-		if rbErr := tx.Rollback(); rbErr != nil {
-			slog.Error("Failed to rollback transaction", "error", rbErr)
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
 		}
-		appErr := errors.NewDatabase("Failed to prepare statement", err)
-		errors.HandleError(c, appErr)
-		return
-	}
-	defer func() { _ = stmt.Close() }()
+	}()
 
 	var inserted []gin.H
 	for _, cat := range categories {
@@ -71,17 +65,23 @@ func (h *Handler) CreateCategories(c *gin.Context) {
 		}
 		catID := shortuuid.New()
 		lowerName := strings.ToLower(cat.Name)
-		_, err := stmt.Exec(catID, lowerName, cat.Icon, cat.Color)
-		if err != nil {
-			if rbErr := tx.Rollback(); rbErr != nil {
-				slog.Error("Failed to rollback transaction", "error", rbErr)
-			}
+
+		newCat := models.Category{
+			ID:    catID,
+			Name:  lowerName,
+			Icon:  cat.Icon,
+			Color: cat.Color,
+		}
+
+		if err := tx.Create(&newCat).Error; err != nil {
+			tx.Rollback()
 			appErr := errors.NewDatabase("Failed to insert category", err).WithDetails(map[string]any{
 				"categoryName": cat.Name,
 			})
 			errors.HandleError(c, appErr)
 			return
 		}
+
 		inserted = append(inserted, gin.H{
 			"ID":    catID,
 			"name":  lowerName,
@@ -90,7 +90,7 @@ func (h *Handler) CreateCategories(c *gin.Context) {
 		})
 	}
 
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit().Error; err != nil {
 		appErr := errors.NewDatabase("Failed to commit transaction", err)
 		errors.HandleError(c, appErr)
 		return

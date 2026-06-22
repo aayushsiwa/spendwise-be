@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"aayushsiwa/expense-tracker/errors"
+	"aayushsiwa/expense-tracker/models"
 	"aayushsiwa/expense-tracker/validation"
 	"log/slog"
 	"net/http"
@@ -21,15 +22,15 @@ func (h *Handler) DeleteCategory(c *gin.Context) {
 	}
 
 	// Check if category exists
-	var exists int
-	err := h.DB.QueryRow(`SELECT COUNT(*) FROM categories WHERE "ID" = ?`, id).Scan(&exists)
+	var count int64
+	err := h.DB.Model(&models.Category{}).Where(`"ID" = ?`, id).Count(&count).Error
 	if err != nil {
 		appErr := errors.NewDatabase("Failed to check category existence", err)
 		errors.HandleError(c, appErr)
 		return
 	}
 
-	if exists == 0 {
+	if count == 0 {
 		appErr := errors.NewNotFound("Category not found", nil).WithDetails(map[string]any{
 			"categoryID": id,
 		})
@@ -38,8 +39,8 @@ func (h *Handler) DeleteCategory(c *gin.Context) {
 	}
 
 	// Check if category is being used by any records
-	var recordCount int
-	err = h.DB.QueryRow(`SELECT COUNT(*) FROM records WHERE "categoryID" = ?`, id).Scan(&recordCount)
+	var recordCount int64
+	err = h.DB.Model(&models.Record{}).Where(`"categoryID" = ?`, id).Count(&recordCount).Error
 	if err != nil {
 		appErr := errors.NewDatabase("Failed to check category usage", err)
 		errors.HandleError(c, appErr)
@@ -55,7 +56,7 @@ func (h *Handler) DeleteCategory(c *gin.Context) {
 		return
 	}
 
-	_, err = h.DB.Exec(`DELETE FROM categories WHERE "ID" = ?`, id)
+	err = h.DB.Where(`"ID" = ?`, id).Delete(&models.Category{}).Error
 	if err != nil {
 		appErr := errors.NewDatabase("Failed to delete category", err)
 		errors.HandleError(c, appErr)

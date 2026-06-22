@@ -1,23 +1,24 @@
 package handlers
 
 import (
-	"aayushsiwa/expense-tracker/errors"
+	appErrors "aayushsiwa/expense-tracker/errors"
 	"aayushsiwa/expense-tracker/models"
 	"aayushsiwa/expense-tracker/validation"
-	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 func (h *Handler) CreateRecord(c *gin.Context) {
 	var rec models.Record
 	if err := c.ShouldBindJSON(&rec); err != nil {
-		appErr := errors.NewInvalidInput("Invalid JSON body", err)
-		errors.HandleError(c, appErr)
+		appErr := appErrors.NewInvalidInput("Invalid JSON body", err)
+		appErrors.HandleError(c, appErr)
 		return
 	}
 
@@ -25,39 +26,41 @@ func (h *Handler) CreateRecord(c *gin.Context) {
 	validator := validation.NewValidator()
 	validationErrs := validator.ValidateRecord(&rec)
 	if len(validationErrs) > 0 {
-		errors.HandleValidationErrors(c, validationErrs)
+		appErrors.HandleValidationErrors(c, validationErrs)
 		return
 	}
 
 	// Generate custom ID
 	customId, err := h.GenerateCustomID(rec.Date)
 	if err != nil {
-		appErr := errors.NewInternal("Failed to generate record ID", err)
-		errors.HandleError(c, appErr)
+		appErr := appErrors.NewInternal("Failed to generate record ID", err)
+		appErrors.HandleError(c, appErr)
 		return
 	}
 
 	rec.ID = customId
 
 	// Get category ID
-	var categoryID string
-	err = h.DB.QueryRow(`SELECT "ID" FROM categories WHERE name = ?`, strings.ToLower(rec.Category)).Scan(&categoryID)
+	var category models.Category
+	err = h.DB.Select(`"ID"`).Where("name = ?", strings.ToLower(rec.Category)).First(&category).Error
 	if err != nil {
-		if err == sql.ErrNoRows {
-			appErr := errors.NewInvalidInput("Category not found", err).WithDetails(map[string]any{
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			appErr := appErrors.NewInvalidInput("Category not found", err).WithDetails(map[string]any{
 				"category": rec.Category,
 			})
-			errors.HandleError(c, appErr)
+			appErrors.HandleError(c, appErr)
 		} else {
-			appErr := errors.NewDatabase("Failed to find category", err)
-			errors.HandleError(c, appErr)
+			appErr := appErrors.NewDatabase("Failed to find category", err)
+			appErrors.HandleError(c, appErr)
 		}
 		return
 	}
 
+	rec.CategoryID = &category.ID
+
 	// Compute running balance from actual records
 	var currentBalance float64
-	err = h.DB.QueryRow("SELECT COALESCE(balance, 0) FROM records ORDER BY date DESC, id DESC LIMIT 1").Scan(&currentBalance)
+	err = h.DB.Model(&models.Record{}).Select("COALESCE(balance, 0)").Order("date DESC, id DESC").Limit(1).Scan(&currentBalance).Error
 	if err != nil {
 		currentBalance = 0
 	}
@@ -69,14 +72,12 @@ func (h *Handler) CreateRecord(c *gin.Context) {
 		currentBalance -= rec.Amount
 	}
 
+	rec.Balance = currentBalance
+
 	// Insert record
-	_, err = h.DB.Exec(`
-		INSERT INTO records (id, date, description, "categoryID", amount, type, note, balance)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		rec.ID, rec.Date, rec.Description, categoryID, rec.Amount, rec.Type, rec.Note, currentBalance)
-	if err != nil {
-		appErr := errors.NewDatabase("Failed to insert record", err)
-		errors.HandleError(c, appErr)
+	if err := h.DB.Create(&rec).Error; err != nil {
+		appErr := appErrors.NewDatabase("Failed to insert record", err)
+		appErrors.HandleError(c, appErr)
 		return
 	}
 

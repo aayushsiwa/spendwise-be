@@ -1,15 +1,15 @@
 package handlers
 
 import (
-	"database/sql"
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 func TestHandler_PatchRecord(t *testing.T) {
 	type fields struct {
-		DB *sql.DB
+		DB *gorm.DB
 	}
 	type args struct {
 		c *gin.Context

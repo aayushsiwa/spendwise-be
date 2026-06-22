@@ -2,16 +2,16 @@ package handlers
 
 import (
 	"aayushsiwa/expense-tracker/models"
-	"database/sql"
 	"reflect"
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 func TestHandler_GetRecords(t *testing.T) {
 	type fields struct {
-		DB *sql.DB
+		DB *gorm.DB
 	}
 	type args struct {
 		c *gin.Context

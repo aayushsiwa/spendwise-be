@@ -50,7 +50,7 @@ func (h *Handler) GetRecords(c *gin.Context) {
 
 	slog.Debug("Executing select query", "query", strings.TrimSpace(selectQuery), "args", selectArgs)
 
-	rows, err := h.DB.Query(selectQuery, selectArgs...)
+	rows, err := h.DB.Raw(selectQuery, selectArgs...).Rows()
 	if err != nil {
 		slog.Error("Failed to execute select query", "error", err)
 		appErr := errors.NewDatabase("Failed to retrieve records", err)
@@ -97,7 +97,7 @@ func (h *Handler) GetRecords(c *gin.Context) {
 	slog.Debug("Executing count query", "query", strings.TrimSpace(countQuery), "args", filterArgs)
 
 	var totalCount int
-	if err := h.DB.QueryRow(countQuery, filterArgs...).Scan(&totalCount); err != nil {
+	if err := h.DB.Raw(countQuery, filterArgs...).Scan(&totalCount).Error; err != nil {
 		slog.Warn("Failed to get total count", "error", err)
 		// Fallback to number of records in current page
 		totalCount = len(records)
@@ -182,7 +182,7 @@ func (h *Handler) getGroupedRecords(c *gin.Context, q *models.QueryParams, where
 		groupExpr = "COALESCE(c.name, '')"
 		groupAlias = "category"
 	case "month":
-		groupExpr = "strftime('%Y-%m', r.date)"
+		groupExpr = "SUBSTR(r.date, 1, 7)"
 		groupAlias = "month"
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid groupBy value"})
@@ -198,7 +198,7 @@ func (h *Handler) getGroupedRecords(c *gin.Context, q *models.QueryParams, where
 		ORDER BY total DESC
 	`, groupExpr, groupAlias, whereClause, groupExpr)
 
-	rows, err := h.DB.Query(query, filterArgs...)
+	rows, err := h.DB.Raw(query, filterArgs...).Rows()
 	if err != nil {
 		slog.Error("Failed to execute grouped query", "error", err)
 		errors.HandleError(c, errors.NewDatabase("Failed to retrieve grouped records", err))

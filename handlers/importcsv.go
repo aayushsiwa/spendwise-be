@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"aayushsiwa/expense-tracker/utils"
-	"database/sql"
 	"encoding/csv"
 	"io"
 	"log/slog"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/lithammer/shortuuid/v4"
+	"gorm.io/gorm"
 )
 
 type recordRow struct {
@@ -33,7 +33,7 @@ func normalize(s string) string {
 	return s
 }
 
-func insertBatch(tx *sql.Tx, batch []recordRow) error {
+func insertBatch(tx *gorm.DB, batch []recordRow) error {
 	if len(batch) == 0 {
 		return nil
 	}
@@ -59,8 +59,7 @@ VALUES `
 
 	query += strings.Join(values, ",")
 
-	_, err := tx.Exec(query, args...)
-	return err
+	return tx.Exec(query, args...).Error
 }
 
 func inferRecordType(raw string) string {
@@ -148,8 +147,8 @@ func (h *Handler) ImportCSV(c *gin.Context) {
 	}
 
 	// ---------- START TRANSACTION ----------
-	tx, err := h.DB.Begin()
-	if err != nil {
+	tx := h.DB.Begin()
+	if tx.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to start transaction"})
 		return
 	}
@@ -157,7 +156,7 @@ func (h *Handler) ImportCSV(c *gin.Context) {
 
 	// ---------- PRELOAD EXISTING CATEGORIES ----------
 	categoryMap := make(map[string]string)
-	rows, err := tx.Query(`SELECT "ID", name FROM categories`)
+	rows, err := tx.Raw(`SELECT "ID", name FROM categories`).Rows()
 	if err == nil {
 		defer func() { _ = rows.Close() }()
 		for rows.Next() {
@@ -267,7 +266,7 @@ func (h *Handler) ImportCSV(c *gin.Context) {
 	}
 
 	// ---------- COMMIT ----------
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit().Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
 		return
 	}

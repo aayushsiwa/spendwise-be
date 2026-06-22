@@ -2,51 +2,93 @@ package db
 
 import (
 	"database/sql"
+	"errors"
 	"log/slog"
+	"os"
 
-	_ "modernc.org/sqlite"
+	"aayushsiwa/expense-tracker/models"
+
+	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
-var DB *sql.DB
+var DB *gorm.DB
 
-// Init initializes the database connection with proper error handling
-func Init(path string) (*sql.DB, error) {
-	var err error
-	db, err := sql.Open("sqlite", path)
+// Init initializes the database connection with proper error handling and migrations
+func Init(defaultPath string) (*gorm.DB, error) {
+	dbType := os.Getenv("DB_TYPE")
+	if dbType == "" {
+		dbType = "sqlite"
+	}
+
+	dbURL := os.Getenv("DB_URL")
+	if dbURL == "" {
+		dbURL = os.Getenv("DATABASE_URL")
+	}
+
+	var dialector gorm.Dialector
+
+	switch dbType {
+	case "postgres":
+		if dbURL == "" {
+			return nil, errors.New("DB_URL or DATABASE_URL is required for postgres")
+		}
+		dialector = postgres.Open(dbURL)
+	case "mysql":
+		if dbURL == "" {
+			return nil, errors.New("DB_URL or DATABASE_URL is required for mysql")
+		}
+		dialector = mysql.Open(dbURL)
+	case "sqlite":
+		fallthrough
+	default:
+		if dbURL == "" {
+			dbURL = defaultPath
+		}
+		dialector = sqlite.Open(dbURL)
+	}
+
+	db, err := gorm.Open(dialector, &gorm.Config{})
 	if err != nil {
-		slog.Error("Failed to open database", "path", path, "error", err)
+		slog.Error("Failed to open database", "type", dbType, "error", err)
 		return nil, err
 	}
 
-	if err = db.Ping(); err != nil {
-		slog.Error("Database connection failed", "path", path, "error", err)
+	sqlDB, err := db.DB()
+	if err != nil {
+		slog.Error("Failed to get raw database instance", "error", err)
 		return nil, err
 	}
 
-	// Enable foreign key constraints
-	_, err = db.Exec(`PRAGMA foreign_keys = ON;`)
-	if err != nil {
-		slog.Error("Failed to enable foreign keys", "error", err)
+	if err = sqlDB.Ping(); err != nil {
+		slog.Error("Database connection failed", "error", err)
 		return nil, err
 	}
 
-	// Set WAL mode for better concurrency
-	_, err = db.Exec(`PRAGMA journal_mode = WAL;`)
-	if err != nil {
-		slog.Error("Failed to set WAL mode", "error", err)
-		return nil, err
+	// SQLite specific settings
+	if dbType == "sqlite" {
+		_, _ = sqlDB.Exec(`PRAGMA foreign_keys = ON;`)
+		_, _ = sqlDB.Exec(`PRAGMA journal_mode = WAL;`)
+		_, _ = sqlDB.Exec(`PRAGMA synchronous = NORMAL;`)
 	}
 
-	// Set synchronous mode for better performance vs safety trade-off
-	_, err = db.Exec(`PRAGMA synchronous = NORMAL;`)
+	// AutoMigrate tables
+	err = db.AutoMigrate(
+		&models.Category{},
+		&models.Record{},
+		&models.SummaryDB{},
+		&models.SummaryDetailDB{},
+	)
 	if err != nil {
-		slog.Error("Failed to set synchronous mode", "error", err)
+		slog.Error("Failed to auto-migrate tables", "error", err)
 		return nil, err
 	}
 
 	DB = db
 
-	slog.Info("Database connected successfully", "path", path)
+	slog.Info("Database connected and migrated successfully", "type", dbType)
 	return db, nil
 }
 
@@ -54,7 +96,11 @@ func Init(path string) (*sql.DB, error) {
 func Close() error {
 	if DB != nil {
 		slog.Info("Closing database connection")
-		return DB.Close()
+		sqlDB, err := DB.DB()
+		if err != nil {
+			return err
+		}
+		return sqlDB.Close()
 	}
 	return nil
 }
@@ -62,9 +108,13 @@ func Close() error {
 // HealthCheck performs a database health check
 func HealthCheck() error {
 	if DB == nil {
-		return sql.ErrConnDone
+		return errors.New("database not initialized")
 	}
-	return DB.Ping()
+	sqlDB, err := DB.DB()
+	if err != nil {
+		return err
+	}
+	return sqlDB.Ping()
 }
 
 // GetStats returns database statistics
@@ -72,5 +122,9 @@ func GetStats() sql.DBStats {
 	if DB == nil {
 		return sql.DBStats{}
 	}
-	return DB.Stats()
+	sqlDB, err := DB.DB()
+	if err != nil {
+		return sql.DBStats{}
+	}
+	return sqlDB.Stats()
 }

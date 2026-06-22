@@ -10,26 +10,10 @@ import (
 )
 
 func (h *Handler) GetCategories(c *gin.Context) {
-	rows, err := h.DB.Query(`SELECT "ID", name, icon, color FROM categories ORDER BY name ASC`)
+	var categories []models.Category
+	err := h.DB.Order("name ASC").Find(&categories).Error
 	if err != nil {
 		appErr := errors.NewDatabase("Failed to fetch categories", err)
-		errors.HandleError(c, appErr)
-		return
-	}
-	defer func() { _ = rows.Close() }()
-
-	categories := make([]models.Category, 0)
-	for rows.Next() {
-		var cat models.Category
-		if err := rows.Scan(&cat.ID, &cat.Name, &cat.Icon, &cat.Color); err != nil {
-			slog.Warn("Failed to scan category row", "error", err)
-			continue // Skip invalid rows but continue processing
-		}
-		categories = append(categories, cat)
-	}
-
-	if err = rows.Err(); err != nil {
-		appErr := errors.NewDatabase("Error iterating through categories", err)
 		errors.HandleError(c, appErr)
 		return
 	}

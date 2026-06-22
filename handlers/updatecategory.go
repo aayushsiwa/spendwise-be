@@ -36,15 +36,15 @@ func (h *Handler) UpdateCategory(c *gin.Context) {
 	}
 
 	// Check if category exists
-	var exists int
-	err := h.DB.QueryRow(`SELECT COUNT(*) FROM categories WHERE "ID" = ?`, id).Scan(&exists)
+	var count int64
+	err := h.DB.Model(&models.Category{}).Where(`"ID" = ?`, id).Count(&count).Error
 	if err != nil {
 		appErr := errors.NewDatabase("Failed to check category existence", err)
 		errors.HandleError(c, appErr)
 		return
 	}
 
-	if exists == 0 {
+	if count == 0 {
 		appErr := errors.NewNotFound("Category not found", nil).WithDetails(map[string]any{
 			"categoryID": id,
 		})
@@ -52,8 +52,11 @@ func (h *Handler) UpdateCategory(c *gin.Context) {
 		return
 	}
 
-	_, err = h.DB.Exec(`UPDATE categories SET name = ?, icon = ?, color = ? WHERE "ID" = ?`,
-		cat.Name, cat.Icon, cat.Color, id)
+	err = h.DB.Model(&models.Category{}).Where(`"ID" = ?`, id).Updates(models.Category{
+		Name:  cat.Name,
+		Icon:  cat.Icon,
+		Color: cat.Color,
+	}).Error
 	if err != nil {
 		appErr := errors.NewDatabase("Failed to update category", err)
 		errors.HandleError(c, appErr)

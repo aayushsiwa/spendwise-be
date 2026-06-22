@@ -8,28 +8,31 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 func (h *Handler) RecalculateBalances(c *gin.Context) {
 	ctx := c.Request.Context()
-	tx, err := h.DB.Begin()
-	if err != nil {
+	tx := h.DB.Begin()
+	if tx.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to start transaction"})
 		return
 	}
 	defer func() {
-		if err != nil {
-			_ = tx.Rollback()
+		if tx.Error != nil {
+			tx.Rollback()
 		}
 	}()
 
+	var err error
 	if err = h.recalculateBalances(ctx, tx); err != nil {
 		slog.ErrorContext(ctx, "Failed to recalculate balances", "error", err)
+		tx.Rollback()
 		c.JSON(500, gin.H{"error": "Internal Server Error"})
 		return
 	}
 
-	if err = tx.Commit(); err != nil {
+	if err = tx.Commit().Error; err != nil {
 		slog.ErrorContext(ctx, "Failed to commit transaction", "error", err)
 		c.JSON(500, gin.H{"error": "Internal Server Error"})
 		return
@@ -38,12 +41,12 @@ func (h *Handler) RecalculateBalances(c *gin.Context) {
 	c.JSON(200, gin.H{"status": "Balances recalculated successfully"})
 }
 
-func (h *Handler) recalculateBalances(ctx context.Context, tx *sql.Tx) error {
-	rows, err := tx.Query(`
+func (h *Handler) recalculateBalances(ctx context.Context, tx *gorm.DB) error {
+	rows, err := tx.Raw(`
 		SELECT id, date, amount, type
 		FROM records
 		ORDER BY date ASC, id ASC
-	`)
+	`).Rows()
 	if err != nil {
 		return err
 	}
@@ -85,8 +88,7 @@ func (h *Handler) recalculateBalances(ctx context.Context, tx *sql.Tx) error {
 		}
 		query.WriteString(")")
 
-		_, err := tx.Exec(query.String(), args...)
-		return err
+		return tx.Exec(query.String(), args...).Error
 	}
 
 	for rows.Next() {

@@ -1,15 +1,16 @@
 package handlers
 
 import (
-	"log"
+	"aayushsiwa/expense-tracker/models"
+	"aayushsiwa/expense-tracker/utils"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
 
-	"aayushsiwa/expense-tracker/models"
-	"aayushsiwa/expense-tracker/utils"
-
 	"github.com/gin-gonic/gin"
+	"github.com/lithammer/shortuuid/v4"
+	"gorm.io/gorm"
 )
 
 func (h *Handler) ImportJSON(c *gin.Context) {
@@ -20,16 +21,14 @@ func (h *Handler) ImportJSON(c *gin.Context) {
 		return
 	}
 
-	tx, err := h.DB.Begin()
-	if err != nil {
+	tx := h.DB.Begin()
+	if tx.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to start transaction"})
 		return
 	}
 	defer func() {
-		if err != nil {
-			if rbErr := tx.Rollback(); rbErr != nil {
-				slog.Error("Failed to rollback transaction", "error", rbErr)
-			}
+		if tx.Error != nil {
+			tx.Rollback()
 		}
 	}()
 
@@ -49,19 +48,26 @@ func (h *Handler) ImportJSON(c *gin.Context) {
 			continue
 		}
 
-		var categoryID int
-		err = h.DB.QueryRow(`SELECT id FROM categories WHERE name = ?`, category).Scan(&categoryID)
+		var categoryObj models.Category
+		err = tx.Where("name = ?", category).First(&categoryObj).Error
 		if err != nil {
-			res, err := h.DB.Exec(`INSERT INTO categories (name) VALUES (?)`, category)
-			if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				categoryObj = models.Category{
+					ID:    shortuuid.New(),
+					Name:  category,
+					Icon:  "",
+					Color: "",
+				}
+				if err := tx.Create(&categoryObj).Error; err != nil {
+					continue
+				}
+			} else {
 				continue
 			}
-			lastID, _ := res.LastInsertId()
-			categoryID = int(lastID)
 		}
 
 		var currentBalance float64
-		err = h.DB.QueryRow("SELECT COALESCE(balance, 0) FROM records ORDER BY date DESC, id DESC LIMIT 1").Scan(&currentBalance)
+		err = tx.Model(&models.Record{}).Select("COALESCE(balance, 0)").Order("date DESC, id DESC").Limit(1).Scan(&currentBalance).Error
 		if err != nil {
 			currentBalance = 0
 		}
@@ -78,10 +84,19 @@ func (h *Handler) ImportJSON(c *gin.Context) {
 			continue
 		}
 
-		_, err = h.DB.Exec(`INSERT INTO records (id, date, description, "categoryID", amount, type, note, balance) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-			customID, date, rec.Description, categoryID, rec.Amount, rec.Type, rec.Note, currentBalance)
-		if err != nil {
-			log.Printf("Failed to insert record: %v", err)
+		newRecord := models.Record{
+			ID:          customID,
+			Date:        date,
+			Description: rec.Description,
+			CategoryID:  &categoryObj.ID,
+			Amount:      rec.Amount,
+			Type:        rec.Type,
+			Note:        rec.Note,
+			Balance:     currentBalance,
+		}
+
+		if err := tx.Create(&newRecord).Error; err != nil {
+			slog.ErrorContext(ctx, "Failed to insert record during JSON import", "error", err)
 			continue
 		}
 
@@ -89,16 +104,17 @@ func (h *Handler) ImportJSON(c *gin.Context) {
 	}
 
 	if err := h.recalculateBalances(ctx, tx); err != nil {
-		log.Printf("Failed to recalculate balances: %v", err)
+		slog.ErrorContext(ctx, "Failed to recalculate balances during JSON import", "error", err)
 	}
 
-	if err := h.UpdateSummary(); err != nil {
-		slog.Warn("Failed to update summary after JSON import", "error", err)
-	}
-
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit().Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
 		return
+	}
+
+	// Update summary
+	if err := h.UpdateSummary(); err != nil {
+		slog.Warn("Failed to update summary after JSON import", "error", err)
 	}
 
 	c.JSON(http.StatusCreated, gin.H{

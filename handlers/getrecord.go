@@ -1,15 +1,15 @@
 package handlers
 
 import (
-	"aayushsiwa/expense-tracker/errors"
+	appErrors "aayushsiwa/expense-tracker/errors"
 	"aayushsiwa/expense-tracker/models"
 	"aayushsiwa/expense-tracker/validation"
-	"database/sql"
 	"fmt"
 	"log/slog"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 func (h *Handler) GetRecord(c *gin.Context) {
@@ -19,26 +19,26 @@ func (h *Handler) GetRecord(c *gin.Context) {
 	validator := validation.NewValidator()
 	id, validationErrs := validator.ValidateID(idStr)
 	if len(validationErrs) > 0 {
-		errors.HandleValidationErrors(c, validationErrs)
+		appErrors.HandleValidationErrors(c, validationErrs)
 		return
 	}
 
-	row := h.DB.QueryRow(`
-		SELECT r.id, r.date, r.description, COALESCE(c.name, '') as category, r.amount, r.type, r.note, r.balance
-		FROM records r
-		LEFT JOIN categories c ON r."categoryID" = c.id
-		WHERE r.id = ?
-	`, id)
-
 	var rec models.Record
-	if err := row.Scan(&rec.ID, &rec.Date, &rec.Description, &rec.Category, &rec.Amount, &rec.Type, &rec.Note, &rec.Balance); err != nil {
-		if err == sql.ErrNoRows {
-			appErr := errors.NewNotFound(fmt.Sprintf("Record with ID %s not found", id), err)
-			errors.HandleError(c, appErr)
-		} else {
-			appErr := errors.NewDatabase("Failed to read record", err)
-			errors.HandleError(c, appErr)
-		}
+	err := h.DB.Table("records r").
+		Select(`r.id, r.date, r.description, COALESCE(c.name, '') as category, r.amount, r.type, r.note, r.balance`).
+		Joins(`LEFT JOIN categories c ON r."categoryID" = c.ID`).
+		Where("r.id = ?", id).
+		Scan(&rec).Error
+
+	if err != nil {
+		appErr := appErrors.NewDatabase("Failed to read record", err)
+		appErrors.HandleError(c, appErr)
+		return
+	}
+
+	if rec.ID == "" {
+		appErr := appErrors.NewNotFound(fmt.Sprintf("Record with ID %s not found", id), gorm.ErrRecordNotFound)
+		appErrors.HandleError(c, appErr)
 		return
 	}
 
