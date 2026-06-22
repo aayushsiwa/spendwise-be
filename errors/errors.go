@@ -168,13 +168,28 @@ func HandleError(c *gin.Context, err error) {
 	})
 }
 
+type funcNameGetter interface {
+	Name() string
+}
+
+var (
+	runtimeCaller    = runtime.Caller
+	runtimeFuncForPC = func(pc uintptr) funcNameGetter {
+		fn := runtime.FuncForPC(pc)
+		if fn == nil {
+			return nil
+		}
+		return fn
+	}
+)
+
 // getHandlerName returns the name of the calling function for context
 func getHandlerName() string {
-	pc, _, _, ok := runtime.Caller(2)
+	pc, _, _, ok := runtimeCaller(2)
 	if !ok {
 		return "unknown"
 	}
-	fn := runtime.FuncForPC(pc)
+	fn := runtimeFuncForPC(pc)
 	if fn == nil {
 		return "unknown"
 	}

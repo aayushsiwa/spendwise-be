@@ -1,11 +1,12 @@
 package handlers
 
 import (
+	"log/slog"
+	"net/http"
+
 	"aayushsiwa/expense-tracker/errors"
 	"aayushsiwa/expense-tracker/models"
 	"aayushsiwa/expense-tracker/validation"
-	"log/slog"
-	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
@@ -13,7 +14,6 @@ import (
 func (h *Handler) DeleteCategory(c *gin.Context) {
 	idStr := c.Param("id")
 
-	// Validate ID parameter
 	validator := validation.NewValidator()
 	id, validationErrs := validator.ValidateID(idStr)
 	if len(validationErrs) > 0 {

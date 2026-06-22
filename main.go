@@ -12,6 +12,7 @@ import (
 	"aayushsiwa/expense-tracker/middleware"
 	"aayushsiwa/expense-tracker/routes"
 	"aayushsiwa/expense-tracker/secure"
+	"aayushsiwa/expense-tracker/services"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -45,6 +46,7 @@ func init() {
 	slog.Info("Application initialized successfully")
 }
 
+// Main initializes and starts the Expense Tracker Server with graceful shutdown support.
 func main() {
 	slog.Info("Starting Expense Tracker Server...")
 
@@ -98,7 +100,8 @@ func main() {
 	prefix := "/api/v1"
 	apiGroup := server.Group(prefix)
 
-	handler := handlers.NewHandler(database)
+	svc := services.NewRecordService(database)
+	handler := handlers.NewHandler(svc)
 
 	apiRoutes := routes.NewRoutes(handler)
 	routes.AttachRoutes(apiGroup, apiRoutes)

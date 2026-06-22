@@ -108,7 +108,7 @@ func (v *Validator) ValidateCategory(category *models.Category) errors.Validatio
 func (v *Validator) ValidateID(idStr string) (string, errors.ValidationErrors) {
 	v.errors = make(errors.ValidationErrors, 0)
 
-	if idStr == "" {
+	if idStr == "" || strings.TrimSpace(idStr) == "" {
 		v.errors = append(v.errors, errors.NewValidationError("id", "ID is required", idStr))
 		return "", v.errors
 	}

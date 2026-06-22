@@ -1,16 +1,15 @@
 package handlers
 
 import (
-	"aayushsiwa/expense-tracker/errors"
-	"aayushsiwa/expense-tracker/models"
-	"aayushsiwa/expense-tracker/validation"
 	"fmt"
 	"log/slog"
 	"net/http"
-	"strings"
+
+	"aayushsiwa/expense-tracker/errors"
+	"aayushsiwa/expense-tracker/models"
+	"aayushsiwa/expense-tracker/validation"
 
 	"github.com/gin-gonic/gin"
-	"github.com/lithammer/shortuuid/v4"
 )
 
 func (h *Handler) CreateCategories(c *gin.Context) {
@@ -28,14 +27,12 @@ func (h *Handler) CreateCategories(c *gin.Context) {
 		return
 	}
 
-	// Validate all categories before processing
 	validator := validation.NewValidator()
 	var allValidationErrs errors.ValidationErrors
 
 	for i, cat := range categories {
 		validationErrs := validator.ValidateCategory(&cat)
 		for _, err := range validationErrs {
-			// Add index to field name for better error reporting
 			err.Field = fmt.Sprintf("categories[%d].%s", i, err.Field)
 			allValidationErrs = append(allValidationErrs, err)
 		}
@@ -46,56 +43,31 @@ func (h *Handler) CreateCategories(c *gin.Context) {
 		return
 	}
 
-	tx := h.DB.Begin()
-	if tx.Error != nil {
-		appErr := errors.NewDatabase("Failed to begin transaction", tx.Error)
-		errors.HandleError(c, appErr)
+	inserted, err := h.Service.CreateCategories(c.Request.Context(), categories)
+	if err != nil {
+		errors.HandleError(c, err)
 		return
 	}
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
 
-	var inserted []gin.H
-	for _, cat := range categories {
-		if cat.Name == "" {
-			continue
-		}
-		catID := shortuuid.New()
-		lowerName := strings.ToLower(cat.Name)
-
-		newCat := models.Category{
-			ID:    catID,
-			Name:  lowerName,
-			Icon:  cat.Icon,
-			Color: cat.Color,
-		}
-
-		if err := tx.Create(&newCat).Error; err != nil {
-			tx.Rollback()
-			appErr := errors.NewDatabase("Failed to insert category", err).WithDetails(map[string]any{
-				"categoryName": cat.Name,
-			})
-			errors.HandleError(c, appErr)
-			return
-		}
-
-		inserted = append(inserted, gin.H{
-			"ID":    catID,
-			"name":  lowerName,
+	insertedRes := make([]gin.H, 0, len(inserted))
+	for _, cat := range inserted {
+		insertedRes = append(insertedRes, gin.H{
+			"ID":    cat.ID,
+			"name":  cat.Name,
 			"icon":  cat.Icon,
 			"color": cat.Color,
 		})
 	}
 
+<<<<<<< HEAD
 	if err := tx.Commit().Error; err != nil {
 		appErr := errors.NewDatabase("Failed to commit transaction", err)
 		errors.HandleError(c, appErr)
 		return
 	}
 
+=======
+>>>>>>> 0617a2afde94cf5b86ce3dd3494faae90d7b64cd
 	slog.Info("Categories created successfully", "count", len(inserted))
-	c.JSON(http.StatusCreated, inserted)
+	c.JSON(http.StatusCreated, insertedRes)
 }

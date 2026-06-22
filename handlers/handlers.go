@@ -1,11 +1,24 @@
 package handlers
 
-import "gorm.io/gorm"
+import (
+	"aayushsiwa/expense-tracker/services"
+	"mime/multipart"
+
+	"github.com/lithammer/shortuuid/v4"
+)
 
 type Handler struct {
-	DB *gorm.DB
+	Service services.Service
 }
 
-func NewHandler(db *gorm.DB) *Handler {
-	return &Handler{DB: db}
+// NewHandler returns a new Handler configured with the provided service.
+func NewHandler(s services.Service) *Handler {
+	return &Handler{
+		Service: s,
+	}
 }
+
+var (
+	genIDFunc    = func(date string) (string, error) { return shortuuid.New(), nil }
+	openFileFunc = func(fh *multipart.FileHeader) (multipart.File, error) { return fh.Open() }
+)
