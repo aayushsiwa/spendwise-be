@@ -1,10 +1,12 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"log/slog"
 	"os"
+	"time"
 
 	"aayushsiwa/expense-tracker/models"
 
@@ -42,12 +44,12 @@ func Init(defaultPath string) (*gorm.DB, error) {
 		}
 		dialector = mysql.Open(dbURL)
 	case "sqlite":
-		fallthrough
-	default:
 		if dbURL == "" {
 			dbURL = defaultPath
 		}
 		dialector = sqlite.Open(dbURL)
+	default:
+		return nil, errors.New("unsupported database type: " + dbType)
 	}
 
 	db, err := gorm.Open(dialector, &gorm.Config{})
@@ -62,16 +64,26 @@ func Init(defaultPath string) (*gorm.DB, error) {
 		return nil, err
 	}
 
-	if err = sqlDB.Ping(); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err = sqlDB.PingContext(ctx); err != nil {
 		slog.Error("Database connection failed", "error", err)
+		sqlDB.Close()
 		return nil, err
 	}
 
 	// SQLite specific settings
 	if dbType == "sqlite" {
-		_, _ = sqlDB.Exec(`PRAGMA foreign_keys = ON;`)
-		_, _ = sqlDB.Exec(`PRAGMA journal_mode = WAL;`)
-		_, _ = sqlDB.Exec(`PRAGMA synchronous = NORMAL;`)
+		if _, err := sqlDB.ExecContext(ctx, `PRAGMA foreign_keys = ON;`); err != nil {
+			slog.Warn("Failed to set PRAGMA foreign_keys", "error", err)
+		}
+		if _, err := sqlDB.ExecContext(ctx, `PRAGMA journal_mode = WAL;`); err != nil {
+			slog.Warn("Failed to set PRAGMA journal_mode", "error", err)
+		}
+		if _, err := sqlDB.ExecContext(ctx, `PRAGMA synchronous = NORMAL;`); err != nil {
+			slog.Warn("Failed to set PRAGMA synchronous", "error", err)
+		}
 	}
 
 	// AutoMigrate tables
@@ -83,6 +95,7 @@ func Init(defaultPath string) (*gorm.DB, error) {
 	)
 	if err != nil {
 		slog.Error("Failed to auto-migrate tables", "error", err)
+		sqlDB.Close()
 		return nil, err
 	}
 
@@ -114,7 +127,9 @@ func HealthCheck() error {
 	if err != nil {
 		return err
 	}
-	return sqlDB.Ping()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return sqlDB.PingContext(ctx)
 }
 
 // GetStats returns database statistics
