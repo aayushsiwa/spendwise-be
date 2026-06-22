@@ -67,6 +67,21 @@ func TestImportJSON(t *testing.T) {
 			wantStatus: http.StatusCreated,
 			wantBody:   `"recordsImported":2`,
 		},
+		{
+			name: "success but update summary fails",
+			body: func() string {
+				records := []models.Record{
+					{Date: "2024-01-01", Description: "Salary", Category: "income", Amount: 3000.0, Type: "income"},
+				}
+				b, _ := json.Marshal(records)
+				return string(b)
+			}(),
+			mock: &mocks.MockService{
+				UpdateSummaryErr: fmt.Errorf("update summary failed"),
+			},
+			wantStatus: http.StatusCreated,
+			wantBody:   `"recordsImported":1`,
+		},
 	}
 
 	for _, tt := range tests {

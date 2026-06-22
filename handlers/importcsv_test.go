@@ -15,7 +15,6 @@ import (
 	"aayushsiwa/expense-tracker/services"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 func buildCSVUploadRequest(t *testing.T, content string) *http.Request {
@@ -49,16 +48,7 @@ func buildLargeCSVUploadRequest(t *testing.T) *http.Request {
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	return req
 }
-
-<<<<<<< HEAD
-func Test_insertBatch(t *testing.T) {
-	type args struct {
-		tx    *gorm.DB
-		batch []recordRow
-	}
-=======
 func TestImportCSV(t *testing.T) {
->>>>>>> 0617a2afde94cf5b86ce3dd3494faae90d7b64cd
 	tests := []struct {
 		name       string
 		body       string
