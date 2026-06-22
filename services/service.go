@@ -2,10 +2,11 @@ package services
 
 import (
 	"context"
-	"database/sql"
 	"io"
 
 	"aayushsiwa/expense-tracker/models"
+
+	"gorm.io/gorm"
 )
 
 type Service interface {
@@ -33,10 +34,10 @@ type Service interface {
 }
 
 type RecordService struct {
-	db *sql.DB
+	db *gorm.DB
 }
 
 // NewRecordService creates a new RecordService with the provided database connection.
-func NewRecordService(db *sql.DB) *RecordService {
+func NewRecordService(db *gorm.DB) *RecordService {
 	return &RecordService{db: db}
 }

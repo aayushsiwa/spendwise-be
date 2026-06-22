@@ -1,7 +1,6 @@
 package routes
 
 import (
-	"database/sql"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -9,7 +8,8 @@ import (
 	"aayushsiwa/expense-tracker/db"
 
 	"github.com/gin-gonic/gin"
-	_ "modernc.org/sqlite"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 func TestNewRoutes(t *testing.T) {
@@ -168,15 +168,10 @@ func TestHealthCheck(t *testing.T) {
 	})
 
 	t.Run("healthy", func(t *testing.T) {
-		testDb, err := sql.Open("sqlite", ":memory:")
+		testDb, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 		if err != nil {
 			t.Fatalf("failed to open test db: %v", err)
 		}
-		defer func() {
-			if err := testDb.Close(); err != nil {
-				t.Fatalf("failed to close test db: %v", err)
-			}
-		}()
 		db.DB = testDb
 
 		r := gin.New()
