@@ -69,7 +69,9 @@ func Init(defaultPath string) (*gorm.DB, error) {
 
 	if err = sqlDB.PingContext(ctx); err != nil {
 		slog.Error("Database connection failed", "error", err)
-		sqlDB.Close()
+		if closeErr := sqlDB.Close(); closeErr != nil {
+			slog.Error("Error closing sql db", "error", closeErr)
+		}
 		return nil, err
 	}
 
@@ -95,7 +97,9 @@ func Init(defaultPath string) (*gorm.DB, error) {
 	)
 	if err != nil {
 		slog.Error("Failed to auto-migrate tables", "error", err)
-		sqlDB.Close()
+		if closeErr := sqlDB.Close(); closeErr != nil {
+			slog.Error("Error closing sql db", "error", closeErr)
+		}
 		return nil, err
 	}
 
