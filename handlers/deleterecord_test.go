@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -59,7 +60,7 @@ func TestDeleteRecord(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(w)
-			c.Request = httptest.NewRequest(http.MethodDelete, "/records/"+tt.id, nil)
+			c.Request = httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/records/"+tt.id, nil)
 			c.Params = gin.Params{{Key: "id", Value: tt.id}}
 
 			svc := tt.mock

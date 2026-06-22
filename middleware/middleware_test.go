@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -28,7 +29,7 @@ func TestSecurityHeaders(t *testing.T) {
 	})
 
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodGet, "/test", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
 	r.ServeHTTP(w, req)
 
 	if w.Header().Get("X-Content-Type-Options") != "nosniff" {
@@ -65,7 +66,7 @@ func TestRequestLogger(t *testing.T) {
 			})
 
 			w := httptest.NewRecorder()
-			req, _ := http.NewRequest(http.MethodGet, "/test", nil)
+			req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
 			r.ServeHTTP(w, req)
 
 			if w.Code != tt.status {
@@ -87,7 +88,7 @@ func TestErrorHandler(t *testing.T) {
 	})
 
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodGet, "/panic", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/panic", nil)
 	r.ServeHTTP(w, req)
 
 	if w.Code != http.StatusInternalServerError {
@@ -123,7 +124,7 @@ func TestErrorHandler_UnknownError(t *testing.T) {
 	})
 
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodGet, "/panic-unknown", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/panic-unknown", nil)
 	r.ServeHTTP(w, req)
 
 	if w.Code != http.StatusInternalServerError {
@@ -160,7 +161,7 @@ func TestValidationErrorHandler(t *testing.T) {
 	})
 
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodGet, "/validate", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/validate", nil)
 	r.ServeHTTP(w, req)
 
 	var body map[string]map[string]any

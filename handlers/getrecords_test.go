@@ -168,7 +168,7 @@ func TestGetRecords(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(w)
-			c.Request = httptest.NewRequest(http.MethodGet, tt.query, nil)
+			c.Request = httptest.NewRequestWithContext(context.Background(), http.MethodGet, tt.query, nil)
 
 			svc := tt.mock
 			if svc == nil {
