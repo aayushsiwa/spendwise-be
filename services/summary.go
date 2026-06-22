@@ -2,7 +2,6 @@ package services
 
 import (
 	"context"
-	"database/sql"
 	"log/slog"
 	"strings"
 	"time"
@@ -10,97 +9,131 @@ import (
 	"aayushsiwa/expense-tracker/errors"
 	"aayushsiwa/expense-tracker/models"
 	"aayushsiwa/expense-tracker/utils"
+
+	"gorm.io/gorm"
 )
 
-func (s *RecordService) updateSummaryTx(ctx context.Context, tx *sql.Tx) (err error) {
+func (s *RecordService) updateSummaryTx(ctx context.Context, tx *gorm.DB) (err error) {
 	slog.InfoContext(ctx, "Updating summary...")
 
-	if _, err = tx.ExecContext(ctx, "DELETE FROM summary"); err != nil {
+	if err = tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&models.SummaryDB{}).Error; err != nil {
 		return errors.NewDatabase("Failed to clear summary", err)
 	}
-	if _, err = tx.ExecContext(ctx, "DELETE FROM summary_details"); err != nil {
+	if err = tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&models.SummaryDetailDB{}).Error; err != nil {
 		return errors.NewDatabase("Failed to clear summary_details", err)
 	}
 
-	var minMonth sql.NullString
-	if err = tx.QueryRowContext(ctx, `
-		SELECT MIN(strftime('%Y-%m', date))
-		FROM records
-	`).Scan(&minMonth); err != nil {
+	dialect := tx.Name()
+	monthExpr := getMonthExpression(dialect, "date")
+
+	var count int64
+	if err = tx.Model(&models.Record{}).Count(&count).Error; err != nil {
+		return errors.NewDatabase("Failed to count records for min month", err)
+	}
+	if count == 0 {
+		slog.InfoContext(ctx, "No records found, summary will be empty")
+		return nil
+	}
+
+	var minMonthStr string
+	err = tx.Model(&models.Record{}).Select("MIN(" + monthExpr + ")").Row().Scan(&minMonthStr)
+	if err != nil {
 		return errors.NewDatabase("Failed to get min month", err)
 	}
 
-	if !minMonth.Valid {
+	if minMonthStr == "" {
 		slog.InfoContext(ctx, "No records found, summary will be empty")
 		return nil
 	}
 
 	maxMonth := time.Now().Format("2006-01")
 
-	rows, err := tx.QueryContext(ctx, `
-		SELECT
-			strftime('%Y-%m', date) AS month,
-			SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) AS "totalIncome",
-			SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) AS "totalExpense"
-		FROM records
-		GROUP BY month
-		ORDER BY month ASC
-	`)
+	type MonthAgg struct {
+		Month        string
+		TotalIncome  float64
+		TotalExpense float64
+	}
+	var aggs []MonthAgg
+	err = tx.Model(&models.Record{}).
+		Select(monthExpr + " AS month, SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) AS total_income, SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) AS total_expense").
+		Group("month").
+		Order("month ASC").
+		Scan(&aggs).Error
 	if err != nil {
 		return errors.NewDatabase("Failed to aggregate records", err)
 	}
-	defer func() { _ = rows.Close() }()
 
 	type monthData struct {
 		income  float64
 		expense float64
 	}
 	data := make(map[string]monthData)
-
-	for rows.Next() {
-		var m string
-		var inc, exp float64
-		if err = rows.Scan(&m, &inc, &exp); err != nil {
-			return errors.NewDatabase("Failed to scan summary row", err)
-		}
-		data[m] = monthData{inc, exp}
-	}
-	if err = rows.Err(); err != nil {
-		return errors.NewDatabase("Error iterating summary rows", err)
+	for _, agg := range aggs {
+		data[agg.Month] = monthData{agg.TotalIncome, agg.TotalExpense}
 	}
 
 	openingBalance := 0.0
-	for m := minMonth.String; m <= maxMonth; m = utils.NextMonth(m) {
+	var summariesToInsert []models.SummaryDB
+	for m := minMonthStr; m <= maxMonth; m = utils.NextMonth(m) {
 		d := data[m]
 		net := d.income - d.expense
 		closing := openingBalance + net
 
-		_, err = tx.ExecContext(ctx, `
-			INSERT INTO summary (month, "totalIncome", "totalExpense", "openingBalance", "netBalance", "closingBalance")
-			VALUES (?, ?, ?, ?, ?, ?)
-		`, m, d.income, d.expense, openingBalance, net, closing)
-		if err != nil {
-			return errors.NewDatabase("Failed to insert summary for month", err)
-		}
-
+		summariesToInsert = append(summariesToInsert, models.SummaryDB{
+			Month:          m,
+			TotalIncome:    d.income,
+			TotalExpense:   d.expense,
+			OpeningBalance: openingBalance,
+			NetBalance:     net,
+			ClosingBalance: closing,
+		})
 		openingBalance = closing
 	}
 
-	_, err = tx.ExecContext(ctx, `
-		INSERT INTO summary_details (month, type, "categoryID", "categoryName", amount)
-		SELECT
-			strftime('%Y-%m', r.date) AS month,
-			r.type,
-			COALESCE(c."ID", '') AS "categoryID",
-			COALESCE(c.name, 'uncategorized') AS "categoryName",
-			SUM(r.amount) AS amount
-		FROM records r
-		LEFT JOIN categories c ON r."categoryID" = c."ID"
-		WHERE r.type IN ('income', 'expense', 'transfer')
-		GROUP BY month, r.type, COALESCE(c."ID", ''), COALESCE(c.name, 'uncategorized')
-	`)
+	if len(summariesToInsert) > 0 {
+		if err = tx.Create(&summariesToInsert).Error; err != nil {
+			return errors.NewDatabase("Failed to insert summary data", err)
+		}
+	}
+
+	type DetailAgg struct {
+		Month        string
+		Type         string
+		CategoryID   string
+		CategoryName string
+		Amount       float64
+	}
+	var details []DetailAgg
+
+	coalesceID := "COALESCE(categories.ID, '')"
+	coalesceName := "COALESCE(categories.name, 'uncategorized')"
+	monthExprWithAlias := getMonthExpression(dialect, "records.date")
+
+	err = tx.Table("records").
+		Select(monthExprWithAlias+" AS month, records.type AS type, "+coalesceID+" AS category_id, "+coalesceName+" AS category_name, SUM(records.amount) AS amount").
+		Joins("LEFT JOIN categories ON records.categoryID = categories.ID").
+		Where("records.type IN ?", []string{"income", "expense", "transfer"}).
+		Group("month, records.type, " + coalesceID + ", " + coalesceName).
+		Scan(&details).Error
 	if err != nil {
-		return errors.NewDatabase("Failed to insert summary details", err)
+		return errors.NewDatabase("Failed to fetch aggregate category details", err)
+	}
+
+	var detailsToInsert []models.SummaryDetailDB
+	for _, det := range details {
+		detailsToInsert = append(detailsToInsert, models.SummaryDetailDB{
+			Month:        det.Month,
+			Type:         det.Type,
+			CategoryID:   det.CategoryID,
+			CategoryName: det.CategoryName,
+			Amount:       det.Amount,
+		})
+	}
+
+	if len(detailsToInsert) > 0 {
+		if err = tx.Create(&detailsToInsert).Error; err != nil {
+			return errors.NewDatabase("Failed to insert summary details", err)
+		}
 	}
 
 	slog.InfoContext(ctx, "Summary updated successfully")
@@ -108,101 +141,88 @@ func (s *RecordService) updateSummaryTx(ctx context.Context, tx *sql.Tx) (err er
 }
 
 func (s *RecordService) UpdateSummary(ctx context.Context) error {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return errors.NewDatabase("Failed to begin transaction", err)
+	tx := s.db.WithContext(ctx).Begin()
+	if tx.Error != nil {
+		return errors.NewDatabase("Failed to begin transaction", tx.Error)
 	}
-	defer func() {
-		if err != nil {
-			_ = tx.Rollback()
-		}
-	}()
 
-	if err = s.updateSummaryTx(ctx, tx); err != nil {
+	if err := s.updateSummaryTx(ctx, tx); err != nil {
+		tx.Rollback()
 		return err
 	}
 
-	if err = tx.Commit(); err != nil {
+	if err := tx.Commit().Error; err != nil {
 		return errors.NewDatabase("Failed to commit summary transaction", err)
 	}
 	return nil
 }
 
 func (s *RecordService) GetSummary(ctx context.Context, from, to, categoryFilter, typeFilter string) (*models.Summary, error) {
-	var totalIncome, totalExpense float64
-	err := s.db.QueryRowContext(ctx, `
-		SELECT
-			COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0),
-			COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0)
-		FROM records WHERE date >= ? AND date <= ?
-	`, from, to).Scan(&totalIncome, &totalExpense)
+	var totals struct {
+		TotalIncome  float64
+		TotalExpense float64
+	}
+	err := s.db.WithContext(ctx).Model(&models.Record{}).
+		Select("COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) AS total_income, COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) AS total_expense").
+		Where("date >= ? AND date <= ?", from, to).
+		Scan(&totals).Error
 	if err != nil {
 		return nil, errors.NewDatabase("Failed to compute totals", err)
 	}
 
 	var openingBalance float64
-	err = s.db.QueryRowContext(ctx, `
-		SELECT COALESCE(SUM(
-			CASE WHEN type = 'income' THEN amount
-			     WHEN type = 'expense' THEN -amount
-			     ELSE 0 END
-		), 0) FROM records WHERE date < ?
-	`, from).Scan(&openingBalance)
+	err = s.db.WithContext(ctx).Model(&models.Record{}).
+		Select("COALESCE(SUM(CASE WHEN type = 'income' THEN amount WHEN type = 'expense' THEN -amount ELSE 0 END), 0)").
+		Where("date < ?", from).
+		Scan(&openingBalance).Error
 	if err != nil {
 		return nil, errors.NewDatabase("Failed to compute opening balance", err)
 	}
 
-	netInRange := totalIncome - totalExpense
+	netInRange := totals.TotalIncome - totals.TotalExpense
 	closingBalance := openingBalance + netInRange
 
-	detailQuery := `
-		SELECT COALESCE(c.id, ''), COALESCE(c.name, ''), r.type, SUM(r.amount)
-		FROM records r
-		LEFT JOIN categories c ON r."categoryID" = c.id
-		WHERE r.date >= ? AND r.date <= ?
-	`
-	detailArgs := []any{from, to}
+	dbQuery := s.db.WithContext(ctx).Table("records").
+		Select("COALESCE(categories.ID, '') as category_id, COALESCE(categories.name, '') as category_name, records.type as type, SUM(records.amount) as amount").
+		Joins("LEFT JOIN categories ON records.categoryID = categories.ID").
+		Where("records.date >= ? AND records.date <= ?", from, to)
 
-	var conditions []string
 	if categoryFilter != "" {
-		conditions = append(conditions, "LOWER(c.name) = ?")
-		detailArgs = append(detailArgs, strings.ToLower(categoryFilter))
+		dbQuery = dbQuery.Where("LOWER(categories.name) = ?", strings.ToLower(categoryFilter))
 	}
 	if typeFilter != "" {
-		conditions = append(conditions, "r.type = ?")
-		detailArgs = append(detailArgs, typeFilter)
-	}
-	if len(conditions) > 0 {
-		detailQuery += " AND " + strings.Join(conditions, " AND ")
+		dbQuery = dbQuery.Where("records.type = ?", typeFilter)
 	}
 
-	detailQuery += " GROUP BY c.id, r.type ORDER BY r.type, SUM(r.amount) DESC"
+	type SummaryDetailAgg struct {
+		CategoryID   string
+		CategoryName string
+		Type         string
+		Amount       float64
+	}
+	var details []SummaryDetailAgg
 
-	rows, err := s.db.QueryContext(ctx, detailQuery, detailArgs...)
+	err = dbQuery.Group("categories.ID, records.type").
+		Order("records.type, SUM(records.amount) DESC").
+		Scan(&details).Error
 	if err != nil {
 		return nil, errors.NewDatabase("Failed to fetch category breakdown", err)
 	}
-	defer func() { _ = rows.Close() }()
 
 	incomes := make([]models.CategoryDetail, 0)
 	expenses := make([]models.CategoryDetail, 0)
-	for rows.Next() {
-		var categoryID string
-		var categoryName, recType string
-		var amount float64
-		if err := rows.Scan(&categoryID, &categoryName, &recType, &amount); err != nil {
-			return nil, errors.NewDatabase("Failed to scan category detail", err)
+	for _, det := range details {
+		cd := models.CategoryDetail{
+			CategoryID: det.CategoryID,
+			Category:   det.CategoryName,
+			Amount:     det.Amount,
 		}
-		cd := models.CategoryDetail{CategoryID: categoryID, Category: categoryName, Amount: amount}
-		switch recType {
+		switch det.Type {
 		case "income":
 			incomes = append(incomes, cd)
 		case "expense":
 			expenses = append(expenses, cd)
 		}
-	}
-	if err := rows.Err(); err != nil {
-		return nil, errors.NewDatabase("Error iterating category details", err)
 	}
 
 	return &models.Summary{
@@ -211,7 +231,7 @@ func (s *RecordService) GetSummary(ctx context.Context, from, to, categoryFilter
 		Net:          netInRange,
 		Opening:      openingBalance,
 		Closing:      closingBalance,
-		TotalExpense: totalExpense,
-		TotalIncome:  totalIncome,
+		TotalExpense: totals.TotalExpense,
+		TotalIncome:  totals.TotalIncome,
 	}, nil
 }
