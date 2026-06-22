@@ -38,7 +38,6 @@ clean: ## Remove the SQLite db file
 		echo "Failed to remove database files"; \
 	fi
 
-
 ## Start the development server with Air for live reloading
 dev: ## Start the development server with Air for live reloading
 	@echo "Starting development server..."

@@ -279,7 +279,8 @@ func (s *RecordService) ImportJSON(ctx context.Context, records []models.Record)
 	}
 
 	if imported == 0 {
-		return 0, nil
+		_ = tx.Rollback()
+		return imported, nil
 	}
 
 	if err = recalculateBalances(ctx, tx); err != nil {
