@@ -14,6 +14,7 @@ var (
 	encryptionKey []byte
 	ErrKeyNotSet  = errors.New("encryption key not set")
 	ErrInvalidKey = errors.New("invalid encryption key")
+	newCipher     = aes.NewCipher
 )
 
 // SetKey sets the encryption key with validation
@@ -43,7 +44,7 @@ func Encrypt(plain string) (string, error) {
 		return "", nil
 	}
 
-	block, err := aes.NewCipher(encryptionKey)
+	block, err := newCipher(encryptionKey)
 	if err != nil {
 		slog.Error("Failed to create cipher", "error", err)
 		return "", err
@@ -85,7 +86,7 @@ func Decrypt(encoded string) (string, error) {
 		return "", err
 	}
 
-	block, err := aes.NewCipher(encryptionKey)
+	block, err := newCipher(encryptionKey)
 	if err != nil {
 		slog.Error("Failed to create cipher for decryption", "error", err)
 		return "", err

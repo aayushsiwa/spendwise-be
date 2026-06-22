@@ -1,16 +1,15 @@
 package handlers
 
 import (
-	"aayushsiwa/expense-tracker/errors"
-	"aayushsiwa/expense-tracker/models"
-	"aayushsiwa/expense-tracker/validation"
 	"fmt"
 	"log/slog"
 	"net/http"
-	"strings"
+
+	"aayushsiwa/expense-tracker/errors"
+	"aayushsiwa/expense-tracker/models"
+	"aayushsiwa/expense-tracker/validation"
 
 	"github.com/gin-gonic/gin"
-	"github.com/lithammer/shortuuid/v4"
 )
 
 func (h *Handler) CreateCategories(c *gin.Context) {
@@ -28,14 +27,12 @@ func (h *Handler) CreateCategories(c *gin.Context) {
 		return
 	}
 
-	// Validate all categories before processing
 	validator := validation.NewValidator()
 	var allValidationErrs errors.ValidationErrors
 
 	for i, cat := range categories {
 		validationErrs := validator.ValidateCategory(&cat)
 		for _, err := range validationErrs {
-			// Add index to field name for better error reporting
 			err.Field = fmt.Sprintf("categories[%d].%s", i, err.Field)
 			allValidationErrs = append(allValidationErrs, err)
 		}
@@ -46,56 +43,22 @@ func (h *Handler) CreateCategories(c *gin.Context) {
 		return
 	}
 
-	tx, err := h.DB.Begin()
+	inserted, err := h.Service.CreateCategories(c.Request.Context(), categories)
 	if err != nil {
-		appErr := errors.NewDatabase("Failed to begin transaction", err)
-		errors.HandleError(c, appErr)
+		errors.HandleError(c, err)
 		return
 	}
 
-	stmt, err := tx.Prepare("INSERT INTO categories (id, name, icon, color) VALUES (?, ?, ?, ?)")
-	if err != nil {
-		if rbErr := tx.Rollback(); rbErr != nil {
-			slog.Error("Failed to rollback transaction", "error", rbErr)
-		}
-		appErr := errors.NewDatabase("Failed to prepare statement", err)
-		errors.HandleError(c, appErr)
-		return
-	}
-	defer func() { _ = stmt.Close() }()
-
-	var inserted []gin.H
-	for _, cat := range categories {
-		if cat.Name == "" {
-			continue
-		}
-		catID := shortuuid.New()
-		lowerName := strings.ToLower(cat.Name)
-		_, err := stmt.Exec(catID, lowerName, cat.Icon, cat.Color)
-		if err != nil {
-			if rbErr := tx.Rollback(); rbErr != nil {
-				slog.Error("Failed to rollback transaction", "error", rbErr)
-			}
-			appErr := errors.NewDatabase("Failed to insert category", err).WithDetails(map[string]any{
-				"categoryName": cat.Name,
-			})
-			errors.HandleError(c, appErr)
-			return
-		}
-		inserted = append(inserted, gin.H{
-			"ID":    catID,
-			"name":  lowerName,
+	insertedRes := make([]gin.H, 0, len(inserted))
+	for _, cat := range inserted {
+		insertedRes = append(insertedRes, gin.H{
+			"ID":    cat.ID,
+			"name":  cat.Name,
 			"icon":  cat.Icon,
 			"color": cat.Color,
 		})
 	}
 
-	if err := tx.Commit(); err != nil {
-		appErr := errors.NewDatabase("Failed to commit transaction", err)
-		errors.HandleError(c, appErr)
-		return
-	}
-
 	slog.Info("Categories created successfully", "count", len(inserted))
-	c.JSON(http.StatusCreated, inserted)
+	c.JSON(http.StatusCreated, insertedRes)
 }

@@ -13,7 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func TestDeleteCategory(t *testing.T) {
+func TestDeleteRecord(t *testing.T) {
 	tests := []struct {
 		name       string
 		id         string
@@ -28,32 +28,31 @@ func TestDeleteCategory(t *testing.T) {
 		},
 		{
 			name: "NotFound",
-			id:   "abc123",
+			id:   "xyz789",
 			mock: &mocks.MockService{
-				DeleteCategoryErr: apperrors.NewNotFound("Category not found", nil),
+				DeleteRecordErr: apperrors.NewNotFound("Record not found", nil),
 			},
 			wantStatus: http.StatusNotFound,
 		},
 		{
-			name: "Conflict",
-			id:   "abc123",
-			mock: &mocks.MockService{
-				DeleteCategoryErr: apperrors.NewConflict("Cannot delete category that has associated records", nil),
-			},
-			wantStatus: http.StatusConflict,
-		},
-		{
 			name: "DatabaseError",
-			id:   "abc123",
+			id:   "xyz789",
 			mock: &mocks.MockService{
-				DeleteCategoryErr: apperrors.NewDatabase("Failed to delete category", nil),
+				DeleteRecordErr: apperrors.NewDatabase("Failed to delete record", nil),
 			},
 			wantStatus: http.StatusInternalServerError,
 		},
 		{
 			name:       "Success",
-			id:         "abc123",
-			wantStatus: http.StatusNoContent,
+			id:         "rec-abc-123",
+			wantStatus: http.StatusOK,
+			wantBody:   "rec-abc-123",
+		},
+		{
+			name:       "ResponseMessageFormat",
+			id:         "some-id-456",
+			wantStatus: http.StatusOK,
+			wantBody:   "some-id-456",
 		},
 	}
 
@@ -61,7 +60,7 @@ func TestDeleteCategory(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(w)
-			c.Request = httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/categories/"+tt.id, nil)
+			c.Request = httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/records/"+tt.id, nil)
 			c.Params = gin.Params{{Key: "id", Value: tt.id}}
 
 			svc := tt.mock
@@ -69,7 +68,7 @@ func TestDeleteCategory(t *testing.T) {
 				svc = &mocks.MockService{}
 			}
 			h := &Handler{Service: svc}
-			h.DeleteCategory(c)
+			h.DeleteRecord(c)
 
 			if w.Code != tt.wantStatus {
 				t.Errorf("status = %d, want %d", w.Code, tt.wantStatus)

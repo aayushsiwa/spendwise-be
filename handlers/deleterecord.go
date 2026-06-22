@@ -14,7 +14,6 @@ import (
 func (h *Handler) DeleteRecord(c *gin.Context) {
 	idStr := c.Param("id")
 
-	// Validate ID parameter
 	validator := validation.NewValidator()
 	id, validationErrs := validator.ValidateID(idStr)
 	if len(validationErrs) > 0 {
@@ -22,29 +21,10 @@ func (h *Handler) DeleteRecord(c *gin.Context) {
 		return
 	}
 
-	res, err := h.DB.Exec(`DELETE FROM records WHERE id = ?`, id)
+	_, err := h.Service.DeleteRecord(c.Request.Context(), id)
 	if err != nil {
-		appErr := errors.NewDatabase("Failed to delete record", err)
-		errors.HandleError(c, appErr)
+		errors.HandleError(c, err)
 		return
-	}
-
-	rowsAffected, err := res.RowsAffected()
-	if err != nil {
-		appErr := errors.NewDatabase("Failed to get affected rows", err)
-		errors.HandleError(c, appErr)
-		return
-	}
-
-	if rowsAffected == 0 {
-		appErr := errors.NewNotFound(fmt.Sprintf("Record with ID %s not found", id), nil)
-		errors.HandleError(c, appErr)
-		return
-	}
-
-	// Update summary
-	if err := h.UpdateSummary(); err != nil {
-		slog.Warn("Failed to update summary after record deletion", "record_id", id, "error", err)
 	}
 
 	slog.Info("Record deleted successfully", "record_id", id)

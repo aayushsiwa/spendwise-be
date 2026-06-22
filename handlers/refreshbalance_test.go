@@ -1,60 +1,58 @@
 package handlers
 
 import (
-	"context"
-	"database/sql"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"aayushsiwa/expense-tracker/mocks"
 
 	"github.com/gin-gonic/gin"
 )
 
-func TestHandler_RecalculateBalances(t *testing.T) {
-	type fields struct {
-		DB *sql.DB
-	}
-	type args struct {
-		c *gin.Context
-	}
+func TestRecalculateBalances(t *testing.T) {
 	tests := []struct {
-		name   string
-		fields fields
-		args   args
+		name       string
+		body       string
+		mock       *mocks.MockService
+		wantStatus int
+		wantBody   string
 	}{
-		// TODO: Add test cases.
+		{
+			name: "service error",
+			mock: &mocks.MockService{
+				RefreshBalancesErr: fmt.Errorf("database failure"),
+			},
+			wantStatus: http.StatusInternalServerError,
+			wantBody:   "database_error",
+		},
+		{
+			name:       "success",
+			wantStatus: http.StatusOK,
+			wantBody:   "Balances recalculated successfully",
+		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			h := &Handler{
-				DB: tt.fields.DB,
-			}
-			h.RecalculateBalances(tt.args.c)
-		})
-	}
-}
 
-func TestHandler_recalculateBalances(t *testing.T) {
-	type fields struct {
-		DB *sql.DB
-	}
-	type args struct {
-		ctx context.Context
-		tx  *sql.Tx
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := &Handler{
-				DB: tt.fields.DB,
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = httptest.NewRequest(http.MethodPost, "/refresh-balance", strings.NewReader(tt.body))
+
+			svc := tt.mock
+			if svc == nil {
+				svc = &mocks.MockService{}
 			}
-			if err := h.recalculateBalances(tt.args.ctx, tt.args.tx); (err != nil) != tt.wantErr {
-				t.Errorf("recalculateBalances() error = %v, wantErr %v", err, tt.wantErr)
+			h := &Handler{Service: svc}
+			h.RecalculateBalances(c)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("status = %d, want %d", w.Code, tt.wantStatus)
+			}
+			if tt.wantBody != "" && !strings.Contains(w.Body.String(), tt.wantBody) {
+				t.Errorf("expected body containing %q, got %s", tt.wantBody, w.Body.String())
 			}
 		})
 	}
