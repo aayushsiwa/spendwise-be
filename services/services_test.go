@@ -467,7 +467,7 @@ func TestUpdateSummary_Errors(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error when summary table is missing")
 		}
-		if !isAppErrorType(err, "database") {
+		if !isAppErrorType(err, "database_error") {
 			t.Errorf("expected database error for summary clear failure, got %T: %v", err, err)
 		}
 	})
@@ -480,9 +480,9 @@ func TestUpdateSummary_Errors(t *testing.T) {
 
 		err := svc.UpdateSummary(context.Background())
 		if err == nil {
-			t.Fatal("expected error when summary_details table is missing")
+			t.Fatal("error when summary_details table is missing")
 		}
-		if !isAppErrorType(err, "database") {
+		if !isAppErrorType(err, "database_error") {
 			t.Errorf("expected database error for summary_details clear failure, got %T: %v", err, err)
 		}
 	})
@@ -497,7 +497,7 @@ func TestUpdateSummary_Errors(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error when records table is missing")
 		}
-		if !isAppErrorType(err, "database") {
+		if !isAppErrorType(err, "database_error") {
 			t.Errorf("expected database error for records query failure, got %T: %v", err, err)
 		}
 	})

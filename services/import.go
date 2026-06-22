@@ -287,12 +287,13 @@ func (s *RecordService) ImportJSON(ctx context.Context, records []models.Record)
 		return
 	}
 
-	if err = tx.Commit(); err != nil {
+	if err = s.updateSummaryTx(ctx, tx); err != nil {
+		slog.ErrorContext(ctx, "Failed to update summary after JSON import", "error", err)
 		return
 	}
 
-	if err = s.UpdateSummary(ctx); err != nil {
-		slog.WarnContext(ctx, "Failed to update summary after JSON import", "error", err)
+	if err = tx.Commit(); err != nil {
+		return
 	}
 
 	return

@@ -22,8 +22,8 @@ func (h *Handler) ExportCSV(c *gin.Context) {
 		c.Header("Content-Type", "text/csv")
 		c.Header("Content-Disposition", "attachment; filename=records.csv")
 	} else {
-		c.Header("Content-Type", "text/plain; charset=utf-8")
-		c.Header("Content-Disposition", "inline; filename=records.txt")
+		c.Header("Content-Type", "text/csv; charset=utf-8")
+		c.Header("Content-Disposition", "inline; filename=records.csv")
 	}
 
 	writer := csv.NewWriter(c.Writer)

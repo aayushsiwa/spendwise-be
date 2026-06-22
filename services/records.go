@@ -45,13 +45,13 @@ func (s *RecordService) CreateRecord(ctx context.Context, rec *models.Record) er
 		return errors.NewDatabase("Failed to recalculate balances", err)
 	}
 
-	if err = tx.Commit(); err != nil {
-		return errors.NewDatabase("Failed to commit transaction", err)
-	}
-
-	if err = s.UpdateSummary(ctx); err != nil {
+	if err = s.updateSummaryTx(ctx, tx); err != nil {
 		slog.ErrorContext(ctx, "Failed to update summary after record creation", "record_id", rec.ID, "error", err)
 		return err
+	}
+
+	if err = tx.Commit(); err != nil {
+		return errors.NewDatabase("Failed to commit transaction", err)
 	}
 
 	return nil
@@ -287,13 +287,13 @@ func (s *RecordService) PatchRecord(ctx context.Context, id string, req *models.
 		return errors.NewDatabase("Failed to recalculate balances", err)
 	}
 
-	if err = tx.Commit(); err != nil {
-		return errors.NewDatabase("Failed to commit transaction", err)
-	}
-
-	if err = s.UpdateSummary(ctx); err != nil {
+	if err = s.updateSummaryTx(ctx, tx); err != nil {
 		slog.ErrorContext(ctx, "Failed to update summary after record update", "record_id", id, "error", err)
 		return err
+	}
+
+	if err = tx.Commit(); err != nil {
+		return errors.NewDatabase("Failed to commit transaction", err)
 	}
 
 	return nil
@@ -328,13 +328,13 @@ func (s *RecordService) DeleteRecord(ctx context.Context, id string) (int64, err
 		return 0, errors.NewDatabase("Failed to recalculate balances", err)
 	}
 
-	if err = tx.Commit(); err != nil {
-		return 0, errors.NewDatabase("Failed to commit transaction", err)
-	}
-
-	if err = s.UpdateSummary(ctx); err != nil {
+	if err = s.updateSummaryTx(ctx, tx); err != nil {
 		slog.ErrorContext(ctx, "Failed to update summary after record deletion", "record_id", id, "error", err)
 		return 0, err
+	}
+
+	if err = tx.Commit(); err != nil {
+		return 0, errors.NewDatabase("Failed to commit transaction", err)
 	}
 
 	return rowsAffected, nil

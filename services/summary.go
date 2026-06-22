@@ -12,19 +12,8 @@ import (
 	"aayushsiwa/expense-tracker/utils"
 )
 
-func (s *RecordService) UpdateSummary(ctx context.Context) (err error) {
+func (s *RecordService) updateSummaryTx(ctx context.Context, tx *sql.Tx) (err error) {
 	slog.InfoContext(ctx, "Updating summary...")
-
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return errors.NewDatabase("Failed to begin transaction", err)
-	}
-
-	defer func() {
-		if err != nil {
-			_ = tx.Rollback()
-		}
-	}()
 
 	if _, err = tx.ExecContext(ctx, "DELETE FROM summary"); err != nil {
 		return errors.NewDatabase("Failed to clear summary", err)
@@ -43,7 +32,7 @@ func (s *RecordService) UpdateSummary(ctx context.Context) (err error) {
 
 	if !minMonth.Valid {
 		slog.InfoContext(ctx, "No records found, summary will be empty")
-		return tx.Commit()
+		return nil
 	}
 
 	maxMonth := time.Now().Format("2006-01")
@@ -114,11 +103,28 @@ func (s *RecordService) UpdateSummary(ctx context.Context) (err error) {
 		return errors.NewDatabase("Failed to insert summary details", err)
 	}
 
+	slog.InfoContext(ctx, "Summary updated successfully")
+	return nil
+}
+
+func (s *RecordService) UpdateSummary(ctx context.Context) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return errors.NewDatabase("Failed to begin transaction", err)
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	if err = s.updateSummaryTx(ctx, tx); err != nil {
+		return err
+	}
+
 	if err = tx.Commit(); err != nil {
 		return errors.NewDatabase("Failed to commit summary transaction", err)
 	}
-
-	slog.InfoContext(ctx, "Summary updated successfully")
 	return nil
 }
 
