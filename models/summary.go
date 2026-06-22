@@ -36,10 +36,9 @@ func (SummaryDB) TableName() string {
 }
 
 type SummaryDetailDB struct {
-	ID           string  `gorm:"primaryKey;column:ID" json:"ID"`
-	Month        string  `gorm:"column:month;not null" json:"month"`
-	Type         string  `gorm:"column:type;not null" json:"type"`
-	CategoryID   string  `gorm:"column:categoryID;not null" json:"categoryID"`
+	Month        string  `gorm:"primaryKey;column:month" json:"month"`
+	Type         string  `gorm:"primaryKey;column:type" json:"type"`
+	CategoryID   string  `gorm:"primaryKey;column:categoryID" json:"categoryID"`
 	CategoryName string  `gorm:"column:categoryName;not null" json:"categoryName"`
 	Amount       float64 `gorm:"column:amount;not null" json:"amount"`
 }

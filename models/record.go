@@ -13,7 +13,7 @@ type Record struct {
 	Date        string     `gorm:"column:date;not null" json:"date"`
 	Description string     `gorm:"column:description;not null" json:"description"`
 	CategoryID  *string    `gorm:"column:categoryID" json:"categoryID,omitempty"`
-	Category    string     `gorm:"-" json:"category"`
+	Category    string     `gorm:"->;column:category" json:"category"`
 	Amount      float64    `gorm:"column:amount;not null" json:"amount"`
 	Type        RecordType `gorm:"column:type;not null" json:"type"`
 	Note        string     `gorm:"column:note" json:"note"`
