@@ -111,3 +111,43 @@ func TestGetRecords(t *testing.T) {
 		})
 	}
 }
+
+// TestGetRecordsInvalidQueryParamErrorFormat verifies HandleBindingError returns
+// the structured validation_error format for invalid query params.
+func TestGetRecordsInvalidQueryParamErrorFormat(t *testing.T) {
+	tests := []struct {
+		name        string
+		query       string
+		wantErrType string
+	}{
+		{
+			name:        "negative page returns validation_error type",
+			query:       "/records?page=-1",
+			wantErrType: "validation_error",
+		},
+		{
+			name:        "negative limit returns validation_error type",
+			query:       "/records?limit=-5",
+			wantErrType: "validation_error",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = httptest.NewRequestWithContext(context.Background(), http.MethodGet, tt.query, nil)
+
+			h := &Handler{Service: &mocks.MockService{}}
+			h.GetRecords(c)
+
+			if w.Code != http.StatusBadRequest {
+				t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
+			}
+			body := w.Body.String()
+			if tt.wantErrType != "" && !strings.Contains(body, tt.wantErrType) {
+				t.Errorf("expected error type %q in body, got %s", tt.wantErrType, body)
+			}
+		})
+	}
+}
