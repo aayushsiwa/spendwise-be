@@ -16,8 +16,8 @@ import (
 func TestNewRoutes(t *testing.T) {
 	routes := NewRoutes(nil)
 
-	if len(routes) != 15 {
-		t.Fatalf("expected 15 routes, got %d", len(routes))
+	if len(routes) != 20 {
+		t.Fatalf("expected 20 routes, got %d", len(routes))
 	}
 
 	expected := []struct {

@@ -31,6 +31,12 @@ type Service interface {
 	GetCategories(ctx context.Context) ([]models.Category, error)
 	UpdateCategory(ctx context.Context, id string, cat *models.Category) error
 	DeleteCategory(ctx context.Context, id string) error
+
+	CreateBudget(ctx context.Context, budget *models.Budget) error
+	GetBudgets(ctx context.Context, month, year int) ([]models.Budget, error)
+	GetBudgetProgress(ctx context.Context, month, year int) ([]models.BudgetProgress, error)
+	UpdateBudget(ctx context.Context, id string, amount float64) error
+	DeleteBudget(ctx context.Context, id string) error
 }
 
 type RecordService struct {

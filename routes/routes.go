@@ -119,6 +119,37 @@ func NewRoutes(h *handlers.Handler) Routes {
 			Pattern:     "/refresh",
 			HandlerFunc: h.RecalculateBalances,
 		},
+		// Budgets
+		{
+			Name:        "GetBudgets",
+			Method:      "GET",
+			Pattern:     "/budgets",
+			HandlerFunc: h.GetBudgets,
+		},
+		{
+			Name:        "GetBudgetProgress",
+			Method:      "GET",
+			Pattern:     "/budgets/progress",
+			HandlerFunc: h.GetBudgetProgress,
+		},
+		{
+			Name:        "CreateBudget",
+			Method:      "POST",
+			Pattern:     "/budgets",
+			HandlerFunc: h.CreateBudget,
+		},
+		{
+			Name:        "UpdateBudget",
+			Method:      "PATCH",
+			Pattern:     "/budgets/:id",
+			HandlerFunc: h.UpdateBudget,
+		},
+		{
+			Name:        "DeleteBudget",
+			Method:      "DELETE",
+			Pattern:     "/budgets/:id",
+			HandlerFunc: h.DeleteBudget,
+		},
 	}
 }
 
