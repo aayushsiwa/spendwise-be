@@ -104,6 +104,29 @@ func (v *Validator) ValidateCategory(category *models.Category) errors.Validatio
 	return v.errors
 }
 
+// ValidateBudget validates a budget model
+func (v *Validator) ValidateBudget(budget *models.Budget) errors.ValidationErrors {
+	v.errors = make(errors.ValidationErrors, 0)
+
+	v.required("categoryID", budget.CategoryID, "Category ID is required")
+	v.positiveNumber("amount", budget.Amount, "Amount must be greater than 0")
+
+	return v.errors
+}
+
+// ValidateUpdateBudgetAmount validates the amount field in a budget update request
+func (v *Validator) ValidateUpdateBudgetAmount(amount *float64) errors.ValidationErrors {
+	v.errors = make(errors.ValidationErrors, 0)
+
+	if amount == nil {
+		v.errors = append(v.errors, errors.NewValidationError("amount", "Amount is required", nil))
+		return v.errors
+	}
+	v.positiveNumber("amount", *amount, "Amount must be greater than 0")
+
+	return v.errors
+}
+
 // ValidateID validates a string ID parameter (records, categories, budgets)
 func (v *Validator) ValidateID(idStr string) (string, errors.ValidationErrors) {
 	v.errors = make(errors.ValidationErrors, 0)

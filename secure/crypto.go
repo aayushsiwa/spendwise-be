@@ -18,7 +18,7 @@ var (
 	newCipher     = aes.NewCipher
 )
 
-SetKey stores the encryption key after validating that it is exactly 32 bytes. It returns ErrInvalidKey if the key length is invalid, nil otherwise.
+// SetKey stores the encryption key after validating that it is exactly 32 bytes. It returns ErrInvalidKey if the key length is invalid, nil otherwise.
 func SetKey(key []byte) error {
 	if len(key) != 32 {
 		slog.ErrorContext(context.Background(), "Invalid encryption key length", "expected", 32, "got", len(key))
