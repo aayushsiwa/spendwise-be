@@ -72,6 +72,9 @@ func (s *RecordService) GetRecord(ctx context.Context, id string) (*models.Recor
 	return &rec, nil
 }
 
+// BuildWhereClauseGORM applies filters from query parameters to a GORM query.
+// It conditionally adds WHERE clauses for record type, category, date range,
+// amount range, and description search based on non-empty parameter values.
 func BuildWhereClauseGORM(db *gorm.DB, q *models.QueryParams) *gorm.DB {
 	if q.Type != "" {
 		db = db.Where("records.type = ?", q.Type)
@@ -125,6 +128,7 @@ func (s *RecordService) GetRecords(ctx context.Context, params *models.QueryPara
 	return records, int(totalCount), nil
 }
 
+// getMonthExpression returns a database-specific SQL expression for extracting the year-month portion from a column.
 func getMonthExpression(dialect string, columnName string) string {
 	switch dialect {
 	case "postgres":

@@ -19,6 +19,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// init sets up structured logging, loads environment variables from a .env file, and initializes encryption with the ENCRYPTION_KEY environment variable. The process terminates if the encryption key is missing or fails to initialize.
 func init() {
 	// Initialize structured logging
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
@@ -46,7 +47,7 @@ func init() {
 	slog.InfoContext(context.Background(), "Application initialized successfully")
 }
 
-// Main initializes and starts the Expense Tracker Server with graceful shutdown support.
+// main initializes and starts the Expense Tracker Server with graceful shutdown support.
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

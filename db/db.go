@@ -18,7 +18,11 @@ import (
 
 var DB *gorm.DB
 
-// Init initializes the database connection with proper error handling and migrations
+// Init initializes the database connection and runs schema migrations.
+// It reads DB_TYPE (defaulting to "sqlite") and DB_URL or DATABASE_URL environment
+// variables to determine database type and connection URL. For SQLite, defaultPath
+// is used when no URL environment variable is set. It returns the initialized GORM
+// database instance.
 func Init(defaultPath string) (*gorm.DB, error) {
 	dbType := os.Getenv("DB_TYPE")
 	if dbType == "" {
@@ -122,7 +126,7 @@ func Close() error {
 	return nil
 }
 
-// HealthCheck performs a database health check
+// HealthCheck verifies that the database connection is working.
 func HealthCheck() error {
 	if DB == nil {
 		return errors.New("database not initialized")
@@ -136,7 +140,7 @@ func HealthCheck() error {
 	return sqlDB.PingContext(ctx)
 }
 
-// GetStats returns database statistics
+// GetStats retrieves statistics for the current database connection. If the database is not initialized or retrieval fails, it returns empty statistics.
 func GetStats() sql.DBStats {
 	if DB == nil {
 		return sql.DBStats{}

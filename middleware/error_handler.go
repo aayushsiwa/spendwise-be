@@ -11,7 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ErrorHandler middleware for centralized error handling
+// ErrorHandler returns a Gin middleware that recovers from panics, logs them with request context, and responds with HTTP 500 Internal Server Error.
 func ErrorHandler() gin.HandlerFunc {
 	return gin.CustomRecovery(func(c *gin.Context, recovered any) {
 		if err, ok := recovered.(string); ok {
@@ -45,7 +45,8 @@ func ErrorHandler() gin.HandlerFunc {
 	})
 }
 
-// RequestLogger middleware for structured request logging
+// RequestLogger returns a Gin middleware that logs structured request details after the handler completes.
+// Log level is determined by the HTTP response status code: error level for 500+, warning level for 400+, and info level otherwise.
 func RequestLogger() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
