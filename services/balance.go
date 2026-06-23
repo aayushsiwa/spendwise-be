@@ -31,7 +31,7 @@ func (s *RecordService) RefreshBalances(ctx context.Context) error {
 // recalculateBalances updates all records' balance values to cumulative running totals in a single query.
 func recalculateBalances(ctx context.Context, tx *gorm.DB) error {
 	// Get the database dialect name
-	dialect := tx.Name()
+	dialect := tx.Dialector.Name()
 
 	var query string
 

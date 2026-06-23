@@ -2,11 +2,11 @@ package models
 
 type Budget struct {
 	ID         string  `gorm:"column:ID;primaryKey" json:"ID"`
-	CategoryID string  `gorm:"column:categoryID;not null" json:"categoryID"`
+	CategoryID string  `gorm:"column:categoryID;not null;constraint:OnDelete:CASCADE;uniqueIndex:idx_budget_unique,composite:categoryID" json:"categoryID"`
 	Category   string  `gorm:"->;column:category" json:"category"`
-	Month      int     `gorm:"column:month;not null" json:"month"`
-	Year       int     `gorm:"column:year;not null" json:"year"`
-	Amount     float64 `gorm:"column:amount;not null" json:"amount"`
+	Month      int     `gorm:"column:month;not null;check:month >= 1 AND month <= 12;uniqueIndex:idx_budget_unique,composite:month" json:"month"`
+	Year       int     `gorm:"column:year;not null;uniqueIndex:idx_budget_unique,composite:year" json:"year"`
+	Amount     float64 `gorm:"column:amount;not null;check:amount > 0" json:"amount"`
 }
 
 func (Budget) TableName() string {

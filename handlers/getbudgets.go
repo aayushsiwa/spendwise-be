@@ -13,8 +13,26 @@ import (
 
 func (h *Handler) GetBudgets(c *gin.Context) {
 	now := time.Now()
-	month, _ := strconv.Atoi(c.DefaultQuery("month", strconv.Itoa(int(now.Month()))))
-	year, _ := strconv.Atoi(c.DefaultQuery("year", strconv.Itoa(now.Year())))
+	month, err := strconv.Atoi(c.DefaultQuery("month", strconv.Itoa(int(now.Month()))))
+	if err != nil {
+		appErrors.HandleError(c, appErrors.NewValidation("Invalid month parameter", map[string]any{
+			"month": map[string]any{
+				"message": "Must be a valid integer",
+				"value":   c.Query("month"),
+			},
+		}))
+		return
+	}
+	year, err := strconv.Atoi(c.DefaultQuery("year", strconv.Itoa(now.Year())))
+	if err != nil {
+		appErrors.HandleError(c, appErrors.NewValidation("Invalid year parameter", map[string]any{
+			"year": map[string]any{
+				"message": "Must be a valid integer",
+				"value":   c.Query("year"),
+			},
+		}))
+		return
+	}
 
 	budgets, err := h.Service.GetBudgets(c.Request.Context(), month, year)
 	if err != nil {
@@ -28,8 +46,26 @@ func (h *Handler) GetBudgets(c *gin.Context) {
 
 func (h *Handler) GetBudgetProgress(c *gin.Context) {
 	now := time.Now()
-	month, _ := strconv.Atoi(c.DefaultQuery("month", strconv.Itoa(int(now.Month()))))
-	year, _ := strconv.Atoi(c.DefaultQuery("year", strconv.Itoa(now.Year())))
+	month, err := strconv.Atoi(c.DefaultQuery("month", strconv.Itoa(int(now.Month()))))
+	if err != nil {
+		appErrors.HandleError(c, appErrors.NewValidation("Invalid month parameter", map[string]any{
+			"month": map[string]any{
+				"message": "Must be a valid integer",
+				"value":   c.Query("month"),
+			},
+		}))
+		return
+	}
+	year, err := strconv.Atoi(c.DefaultQuery("year", strconv.Itoa(now.Year())))
+	if err != nil {
+		appErrors.HandleError(c, appErrors.NewValidation("Invalid year parameter", map[string]any{
+			"year": map[string]any{
+				"message": "Must be a valid integer",
+				"value":   c.Query("year"),
+			},
+		}))
+		return
+	}
 
 	progress, err := h.Service.GetBudgetProgress(c.Request.Context(), month, year)
 	if err != nil {
