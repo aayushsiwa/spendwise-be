@@ -9,7 +9,7 @@ IMAGE_NAME        := expense-backend
 CONTAINER_PORT    := 8080
 HOST_PORT         := 8080
 
-MIN_COVERAGE := 56
+MIN_COVERAGE := 70
 
 # --- Targets ---
 .PHONY: all migrationup migrationdown clean dev build docker run docker-clean push coverage help

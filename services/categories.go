@@ -2,7 +2,6 @@ package services
 
 import (
 	"context"
-	"log/slog"
 	"strings"
 
 	"aayushsiwa/expense-tracker/errors"
@@ -12,19 +11,10 @@ import (
 )
 
 func (s *RecordService) CreateCategories(ctx context.Context, categories []models.Category) ([]models.Category, error) {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, errors.NewDatabase("Failed to begin transaction", err)
+	tx := s.db.WithContext(ctx).Begin()
+	if tx.Error != nil {
+		return nil, errors.NewDatabase("Failed to begin transaction", tx.Error)
 	}
-
-	stmt, err := tx.PrepareContext(ctx, "INSERT INTO categories (id, name, icon, color) VALUES (?, ?, ?, ?)")
-	if err != nil {
-		if rbErr := tx.Rollback(); rbErr != nil {
-			slog.ErrorContext(ctx, "Failed to rollback transaction", "error", rbErr)
-		}
-		return nil, errors.NewDatabase("Failed to prepare statement", err)
-	}
-	defer func() { _ = stmt.Close() }()
 
 	inserted := make([]models.Category, 0, len(categories))
 	for _, cat := range categories {
@@ -33,24 +23,23 @@ func (s *RecordService) CreateCategories(ctx context.Context, categories []model
 		}
 		catID := shortuuid.New()
 		lowerName := strings.ToLower(cat.Name)
-		_, err := stmt.ExecContext(ctx, catID, lowerName, cat.Icon, cat.Color)
-		if err != nil {
-			if rbErr := tx.Rollback(); rbErr != nil {
-				slog.ErrorContext(ctx, "Failed to rollback transaction", "error", rbErr)
-			}
-			return nil, errors.NewDatabase("Failed to insert category", err).WithDetails(map[string]any{
-				"categoryName": cat.Name,
-			})
-		}
-		inserted = append(inserted, models.Category{
+		newCat := models.Category{
 			ID:    catID,
 			Name:  lowerName,
 			Icon:  cat.Icon,
 			Color: cat.Color,
-		})
+		}
+
+		if err := tx.Create(&newCat).Error; err != nil {
+			tx.Rollback()
+			return nil, errors.NewDatabase("Failed to insert category", err).WithDetails(map[string]any{
+				"categoryName": cat.Name,
+			})
+		}
+		inserted = append(inserted, newCat)
 	}
 
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit().Error; err != nil {
 		return nil, errors.NewDatabase("Failed to commit transaction", err)
 	}
 
@@ -58,43 +47,32 @@ func (s *RecordService) CreateCategories(ctx context.Context, categories []model
 }
 
 func (s *RecordService) GetCategories(ctx context.Context) ([]models.Category, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT "ID", name, icon, color FROM categories ORDER BY name ASC`)
+	var categories []models.Category
+	err := s.db.WithContext(ctx).Order("name ASC").Find(&categories).Error
 	if err != nil {
 		return nil, errors.NewDatabase("Failed to fetch categories", err)
 	}
-	defer func() { _ = rows.Close() }()
-
-	categories := make([]models.Category, 0)
-	for rows.Next() {
-		var cat models.Category
-		if err := rows.Scan(&cat.ID, &cat.Name, &cat.Icon, &cat.Color); err != nil {
-			slog.WarnContext(ctx, "Failed to scan category row", "error", err)
-			continue
-		}
-		categories = append(categories, cat)
-	}
-	if err = rows.Err(); err != nil {
-		return nil, errors.NewDatabase("Error iterating through categories", err)
-	}
-
 	return categories, nil
 }
 
 func (s *RecordService) UpdateCategory(ctx context.Context, id string, cat *models.Category) error {
-	var exists int
-	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM categories WHERE "ID" = ?`, id).Scan(&exists)
+	var count int64
+	err := s.db.WithContext(ctx).Model(&models.Category{}).Where("id = ?", id).Count(&count).Error
 	if err != nil {
 		return errors.NewDatabase("Failed to check category existence", err)
 	}
 
-	if exists == 0 {
+	if count == 0 {
 		return errors.NewNotFound("Category not found", nil).WithDetails(map[string]any{
 			"categoryID": id,
 		})
 	}
 
-	_, err = s.db.ExecContext(ctx, `UPDATE categories SET name = ?, icon = ?, color = ? WHERE "ID" = ?`,
-		strings.ToLower(cat.Name), cat.Icon, cat.Color, id)
+	err = s.db.WithContext(ctx).Model(&models.Category{}).Where("id = ?", id).Updates(map[string]any{
+		"name":  strings.ToLower(cat.Name),
+		"icon":  cat.Icon,
+		"color": cat.Color,
+	}).Error
 	if err != nil {
 		return errors.NewDatabase("Failed to update category", err)
 	}
@@ -103,20 +81,20 @@ func (s *RecordService) UpdateCategory(ctx context.Context, id string, cat *mode
 }
 
 func (s *RecordService) DeleteCategory(ctx context.Context, id string) error {
-	var exists int
-	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM categories WHERE "ID" = ?`, id).Scan(&exists)
+	var count int64
+	err := s.db.WithContext(ctx).Model(&models.Category{}).Where("id = ?", id).Count(&count).Error
 	if err != nil {
 		return errors.NewDatabase("Failed to check category existence", err)
 	}
 
-	if exists == 0 {
+	if count == 0 {
 		return errors.NewNotFound("Category not found", nil).WithDetails(map[string]any{
 			"categoryID": id,
 		})
 	}
 
-	var recordCount int
-	err = s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM records WHERE "categoryID" = ?`, id).Scan(&recordCount)
+	var recordCount int64
+	err = s.db.WithContext(ctx).Model(&models.Record{}).Where("categoryID = ?", id).Count(&recordCount).Error
 	if err != nil {
 		return errors.NewDatabase("Failed to check category usage", err)
 	}
@@ -128,7 +106,7 @@ func (s *RecordService) DeleteCategory(ctx context.Context, id string) error {
 		})
 	}
 
-	_, err = s.db.ExecContext(ctx, `DELETE FROM categories WHERE "ID" = ?`, id)
+	err = s.db.WithContext(ctx).Where("id = ?", id).Delete(&models.Category{}).Error
 	if err != nil {
 		return errors.NewDatabase("Failed to delete category", err)
 	}

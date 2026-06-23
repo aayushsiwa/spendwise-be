@@ -19,6 +19,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// init sets up structured logging, loads environment variables from a .env file, and initializes encryption with the ENCRYPTION_KEY environment variable. The process terminates if the encryption key is missing or fails to initialize.
 func init() {
 	// Initialize structured logging
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
@@ -28,32 +29,35 @@ func init() {
 
 	// Load environment variables
 	if err := godotenv.Load(); err != nil {
-		slog.Warn("No .env file found, using system environment variables", "error", err)
+		slog.WarnContext(context.Background(), "No .env file found, using system environment variables", "error", err)
 	}
 
 	// Set encryption key with validation
 	key := os.Getenv("ENCRYPTION_KEY")
 	if key == "" {
-		slog.Error("ENCRYPTION_KEY environment variable is required")
+		slog.ErrorContext(context.Background(), "ENCRYPTION_KEY environment variable is required")
 		os.Exit(1)
 	}
 
 	if err := secure.SetKey([]byte(key)); err != nil {
-		slog.Error("Failed to set encryption key", "error", err)
+		slog.ErrorContext(context.Background(), "Failed to set encryption key", "error", err)
 		os.Exit(1)
 	}
 
-	slog.Info("Application initialized successfully")
+	slog.InfoContext(context.Background(), "Application initialized successfully")
 }
 
-// Main initializes and starts the Expense Tracker Server with graceful shutdown support.
+// main initializes and starts the Expense Tracker Server with graceful shutdown support.
 func main() {
-	slog.Info("Starting Expense Tracker Server...")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	slog.InfoContext(ctx, "Starting Expense Tracker Server...")
 
 	// Initialize database with error handling
 	database, err := db.Init("records.db")
 	if err != nil {
-		slog.Error("Failed to initialize database", "error", err)
+		slog.ErrorContext(ctx, "Failed to initialize database", "error", err)
 		os.Exit(1)
 	}
 
@@ -82,7 +86,7 @@ func main() {
 			}
 		}
 
-		slog.Info("Incoming request",
+		slog.InfoContext(c.Request.Context(), "Incoming request",
 			"method", c.Request.Method,
 			"path", c.Request.URL.Path,
 			"origin", origin,
@@ -106,17 +110,13 @@ func main() {
 	apiRoutes := routes.NewRoutes(handler)
 	routes.AttachRoutes(apiGroup, apiRoutes)
 
-	// Graceful shutdown setup
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	// Handle shutdown signals
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {
 		<-sigChan
-		slog.Info("Received shutdown signal, gracefully shutting down...")
+		slog.InfoContext(ctx, "Received shutdown signal, gracefully shutting down...")
 		cancel()
 	}()
 
@@ -127,9 +127,9 @@ func main() {
 
 	// Start server in a goroutine
 	go func() {
-		slog.Info("Server running at http://localhost:" + port)
+		slog.InfoContext(ctx, "Server running at http://localhost:"+port)
 		if err := server.Run(":" + port); err != nil {
-			slog.Error("Server failed to start", "error", err)
+			slog.ErrorContext(ctx, "Server failed to start", "error", err)
 			cancel()
 		}
 	}()
@@ -138,9 +138,9 @@ func main() {
 	<-ctx.Done()
 
 	// Cleanup
-	slog.Info("Shutting down server...")
+	slog.InfoContext(ctx, "Shutting down server...")
 	if err := db.Close(); err != nil {
-		slog.Error("Failed to close database", "error", err)
+		slog.ErrorContext(ctx, "Failed to close database", "error", err)
 	}
-	slog.Info("Server shutdown complete")
+	slog.InfoContext(ctx, "Server shutdown complete")
 }

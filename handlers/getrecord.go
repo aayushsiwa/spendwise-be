@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"aayushsiwa/expense-tracker/errors"
+	appErrors "aayushsiwa/expense-tracker/errors"
 	"aayushsiwa/expense-tracker/validation"
 
 	"github.com/gin-gonic/gin"
@@ -16,16 +16,16 @@ func (h *Handler) GetRecord(c *gin.Context) {
 	validator := validation.NewValidator()
 	id, validationErrs := validator.ValidateID(idStr)
 	if len(validationErrs) > 0 {
-		errors.HandleValidationErrors(c, validationErrs)
+		appErrors.HandleValidationErrors(c, validationErrs)
 		return
 	}
 
 	rec, err := h.Service.GetRecord(c.Request.Context(), id)
 	if err != nil {
-		errors.HandleError(c, err)
+		appErrors.HandleError(c, err)
 		return
 	}
 
-	slog.Info("Record retrieved successfully", "record_id", rec.ID)
+	slog.InfoContext(c.Request.Context(), "Record retrieved successfully", "record_id", rec.ID)
 	c.JSON(http.StatusOK, rec)
 }

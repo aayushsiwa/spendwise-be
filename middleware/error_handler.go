@@ -11,11 +11,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ErrorHandler middleware for centralized error handling
+// ErrorHandler returns a Gin middleware that recovers from panics, logs them with request context, and responds with HTTP 500 Internal Server Error.
 func ErrorHandler() gin.HandlerFunc {
 	return gin.CustomRecovery(func(c *gin.Context, recovered any) {
 		if err, ok := recovered.(string); ok {
-			slog.Error("Panic recovered",
+			slog.ErrorContext(c.Request.Context(), "Panic recovered",
 				"error", err,
 				"method", c.Request.Method,
 				"path", c.Request.URL.Path,
@@ -28,7 +28,7 @@ func ErrorHandler() gin.HandlerFunc {
 				},
 			})
 		} else {
-			slog.Error("Panic recovered with unknown error",
+			slog.ErrorContext(c.Request.Context(), "Panic recovered with unknown error",
 				"recovered", recovered,
 				"method", c.Request.Method,
 				"path", c.Request.URL.Path,
@@ -45,7 +45,8 @@ func ErrorHandler() gin.HandlerFunc {
 	})
 }
 
-// RequestLogger middleware for structured request logging
+// RequestLogger returns a Gin middleware that logs structured request details after the handler completes.
+// Log level is determined by the HTTP response status code: error level for 500+, warning level for 400+, and info level otherwise.
 func RequestLogger() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
@@ -62,17 +63,8 @@ func RequestLogger() gin.HandlerFunc {
 		statusCode := c.Writer.Status()
 		errorMessage := c.Errors.ByType(gin.ErrorTypePrivate).String()
 
-		// Create log entry
-		logEntry := slog.Info
-		if statusCode >= 400 {
-			logEntry = slog.Warn
-		}
-		if statusCode >= 500 {
-			logEntry = slog.Error
-		}
-
-		// Log with structured fields
-		logEntry("HTTP request",
+		// Log with structured fields and context
+		attrs := []any{
 			"method", method,
 			"path", path,
 			"query", raw,
@@ -81,7 +73,16 @@ func RequestLogger() gin.HandlerFunc {
 			"ip", clientIP,
 			"user_agent", c.Request.UserAgent(),
 			"errors", errorMessage,
-		)
+		}
+		ctx := c.Request.Context()
+		switch {
+		case statusCode >= 500:
+			slog.ErrorContext(ctx, "HTTP request", attrs...)
+		case statusCode >= 400:
+			slog.WarnContext(ctx, "HTTP request", attrs...)
+		default:
+			slog.InfoContext(ctx, "HTTP request", attrs...)
+		}
 	}
 }
 

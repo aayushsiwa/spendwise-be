@@ -16,6 +16,6 @@ func (h *Handler) GetCategories(c *gin.Context) {
 		return
 	}
 
-	slog.Info("Categories retrieved successfully", "count", len(categories))
+	slog.InfoContext(c.Request.Context(), "Categories retrieved successfully", "count", len(categories))
 	c.JSON(http.StatusOK, gin.H{"categories": categories})
 }

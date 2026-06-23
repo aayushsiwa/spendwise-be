@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -92,7 +93,7 @@ func TestExportCSV(t *testing.T) {
 			if tt.query != "" {
 				path += "?" + tt.query
 			}
-			c.Request = httptest.NewRequest(http.MethodGet, path, nil)
+			c.Request = httptest.NewRequestWithContext(context.Background(), http.MethodGet, path, nil)
 
 			if tt.writeError {
 				c.Writer = &errorResponseWriter{ResponseWriter: c.Writer}

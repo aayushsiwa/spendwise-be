@@ -121,7 +121,7 @@ func TestGetSummary(t *testing.T) {
 			if tt.query != "" {
 				path += "?" + tt.query
 			}
-			c.Request = httptest.NewRequest(http.MethodGet, path, nil)
+			c.Request = httptest.NewRequestWithContext(context.Background(), http.MethodGet, path, nil)
 
 			svc := tt.mock
 			if svc == nil {

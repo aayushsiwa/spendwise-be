@@ -27,7 +27,7 @@ func (h *Handler) DeleteRecord(c *gin.Context) {
 		return
 	}
 
-	slog.Info("Record deleted successfully", "record_id", id)
+	slog.InfoContext(c.Request.Context(), "Record deleted successfully", "record_id", id)
 	c.JSON(http.StatusOK, gin.H{
 		"message": fmt.Sprintf("Record with id %s deleted successfully", id),
 	})

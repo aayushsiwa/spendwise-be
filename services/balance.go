@@ -2,119 +2,69 @@ package services
 
 import (
 	"context"
-	"database/sql"
 	"log/slog"
-	"strings"
 
 	"aayushsiwa/expense-tracker/errors"
+
+	"gorm.io/gorm"
 )
 
 func (s *RecordService) RefreshBalances(ctx context.Context) error {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return errors.NewDatabase("Failed to start transaction", err)
+	tx := s.db.WithContext(ctx).Begin()
+	if tx.Error != nil {
+		return errors.NewDatabase("Failed to start transaction", tx.Error)
 	}
-	defer func() {
-		if err != nil {
-			_ = tx.Rollback()
-		}
-	}()
 
-	if err = recalculateBalances(ctx, tx); err != nil {
+	if err := recalculateBalances(ctx, tx); err != nil {
+		tx.Rollback()
 		slog.ErrorContext(ctx, "Failed to recalculate balances", "error", err)
 		return errors.NewDatabase("Failed to recalculate balances", err)
 	}
 
-	if err = tx.Commit(); err != nil {
+	if err := tx.Commit().Error; err != nil {
 		return errors.NewDatabase("Failed to commit transaction", err)
 	}
 
 	return nil
 }
 
-// recalculateBalances updates all records' balance values to reflect cumulative running totals computed in chronological order.
-func recalculateBalances(ctx context.Context, tx *sql.Tx) error {
-	rows, err := tx.QueryContext(ctx, `
-		SELECT id, date, amount, type
-		FROM records
-		ORDER BY date ASC, id ASC
-	`)
-	if err != nil {
-		return err
-	}
-	defer func(rows *sql.Rows) {
-		err := rows.Close()
-		if err != nil {
-			slog.ErrorContext(ctx, "Error closing rows", "err", err)
-		}
-	}(rows)
+// recalculateBalances updates all records' balance values to cumulative running totals in a single query.
+func recalculateBalances(ctx context.Context, tx *gorm.DB) error {
+	// Get the database dialect name
+	dialect := tx.Dialector.Name()
 
-	var (
-		runningBalance float64
-		batchSize      = 100
-		ids            []string
-		balances       []float64
-	)
+	var query string
 
-	updateBatch := func() error {
-		if len(ids) == 0 {
-			return nil
-		}
-		var query strings.Builder
-		query.WriteString("UPDATE records SET balance = CASE id ")
-		var args []any
-		for i := range ids {
-			query.WriteString("WHEN ? THEN ? ")
-			args = append(args, ids[i], balances[i])
-		}
-		query.WriteString("END WHERE id IN (")
-		for i := range ids {
-			if i > 0 {
-				query.WriteString(",")
-			}
-			query.WriteString("?")
-			args = append(args, ids[i])
-		}
-		query.WriteString(")")
-		_, err := tx.ExecContext(ctx, query.String(), args...)
-		return err
+	// MySQL 8.0+ does not allow the target table to be referenced in a subquery of the SET clause,
+	// even through a CTE. Use JOIN-based UPDATE instead.
+	if dialect == "mysql" {
+		query = `
+			UPDATE records r
+			JOIN (
+				SELECT id,
+					SUM(CASE WHEN type = 'income' THEN amount ELSE -amount END)
+						OVER (ORDER BY date ASC, id ASC) AS running_balance
+				FROM records
+			) sub ON r.id = sub.id
+			SET r.balance = sub.running_balance
+		`
+	} else {
+		// PostgreSQL and SQLite support CTE-based UPDATE with subqueries
+		query = `
+			WITH ordered_balances AS (
+				SELECT id,
+					SUM(CASE WHEN type = 'income' THEN amount ELSE -amount END)
+						OVER (ORDER BY date ASC, id ASC) AS running_balance
+				FROM records
+			)
+			UPDATE records
+			SET balance = (
+				SELECT running_balance
+				FROM ordered_balances
+				WHERE ordered_balances.id = records.id
+			)
+		`
 	}
 
-	for rows.Next() {
-		var id string
-		var date string
-		var amount float64
-		var recordType string
-
-		if err := rows.Scan(&id, &date, &amount, &recordType); err != nil {
-			return err
-		}
-
-		if recordType == "income" {
-			runningBalance += amount
-		} else {
-			runningBalance -= amount
-		}
-
-		ids = append(ids, id)
-		balances = append(balances, runningBalance)
-
-		if len(ids) >= batchSize {
-			if err := updateBatch(); err != nil {
-				return err
-			}
-			ids = nil
-			balances = nil
-		}
-	}
-
-	if err := rows.Err(); err != nil {
-		return err
-	}
-
-	if err := updateBatch(); err != nil {
-		return err
-	}
-
-	return nil
+	return tx.WithContext(ctx).Exec(query).Error
 }

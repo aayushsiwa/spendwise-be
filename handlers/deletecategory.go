@@ -20,11 +20,12 @@ func (h *Handler) DeleteCategory(c *gin.Context) {
 		return
 	}
 
-	if err := h.Service.DeleteCategory(c.Request.Context(), id); err != nil {
+	err := h.Service.DeleteCategory(c.Request.Context(), id)
+	if err != nil {
 		errors.HandleError(c, err)
 		return
 	}
 
-	slog.Info("Category deleted successfully", "categoryID", id)
+	slog.InfoContext(c.Request.Context(), "Category deleted successfully", "categoryID", id)
 	c.JSON(http.StatusNoContent, nil)
 }

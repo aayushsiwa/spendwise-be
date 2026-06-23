@@ -2,7 +2,6 @@ package services
 
 import (
 	"context"
-	"database/sql"
 	"encoding/csv"
 	"errors"
 	"io"
@@ -15,39 +14,8 @@ import (
 	"aayushsiwa/expense-tracker/utils"
 
 	"github.com/lithammer/shortuuid/v4"
+	"gorm.io/gorm"
 )
-
-// insertBatch inserts multiple record rows into the records table in a single INSERT statement.
-// If batch is empty, it returns nil immediately. All inserted rows have their balance field set to zero.
-func insertBatch(ctx context.Context, tx *sql.Tx, batch []recordRow) error {
-	if len(batch) == 0 {
-		return nil
-	}
-
-	query := `INSERT INTO records
-(id, date, description, "categoryID", amount, type, note, balance)
-VALUES `
-	args := []any{}
-	values := make([]string, 0, len(batch))
-
-	for _, r := range batch {
-		values = append(values, "(?, ?, ?, ?, ?, ?, ?, 0)")
-		args = append(args,
-			r.id,
-			r.date,
-			r.description,
-			r.categoryID,
-			r.amount,
-			r.recordType,
-			r.note,
-		)
-	}
-
-	query += strings.Join(values, ",")
-
-	_, err := tx.ExecContext(ctx, query, args...)
-	return err
-}
 
 func (s *RecordService) ImportCSV(ctx context.Context, src io.Reader) (imported, skipped int, err error) {
 	reader := csv.NewReader(src)
@@ -98,33 +66,26 @@ func (s *RecordService) ImportCSV(ctx context.Context, src io.Reader) (imported,
 		return strings.TrimSpace(record[idx])
 	}
 
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return 0, 0, err
+	tx := s.db.WithContext(ctx).Begin()
+	if tx.Error != nil {
+		return 0, 0, tx.Error
 	}
 	defer func() {
 		if err != nil {
-			_ = tx.Rollback()
+			tx.Rollback()
 		}
 	}()
 
+	var categories []models.Category
+	if err = tx.Find(&categories).Error; err != nil {
+		return 0, 0, apperrors.NewDatabase("Failed to fetch categories", err)
+	}
 	categoryMap := make(map[string]string)
-	rows, err := tx.QueryContext(ctx, `SELECT "ID", name FROM categories`)
-	if err == nil {
-		defer func() { _ = rows.Close() }()
-		for rows.Next() {
-			var id string
-			var name string
-			if err := rows.Scan(&id, &name); err == nil {
-				categoryMap[strings.ToLower(strings.TrimSpace(name))] = id
-			}
-		}
-		if err = rows.Err(); err != nil {
-			return 0, 0, apperrors.NewDatabase("Failed to iterate categories", err)
-		}
+	for _, c := range categories {
+		categoryMap[strings.ToLower(strings.TrimSpace(c.Name))] = c.ID
 	}
 
-	var batch []recordRow
+	var batch []models.Record
 	batchSize := 100
 
 	for {
@@ -173,25 +134,26 @@ func (s *RecordService) ImportCSV(ctx context.Context, src io.Reader) (imported,
 
 		amount = utils.Abs(amount)
 
-		var catID any
+		var catID *string
 		if category != "" {
 			if id, ok := categoryMap[category]; ok {
-				catID = id
+				catID = &id
 			}
 		}
 
-		batch = append(batch, recordRow{
-			id:          shortuuid.New(),
-			date:        date,
-			description: description,
-			categoryID:  catID,
-			amount:      amount,
-			recordType:  recordType,
-			note:        note,
+		batch = append(batch, models.Record{
+			ID:          shortuuid.New(),
+			Date:        date,
+			Description: description,
+			CategoryID:  catID,
+			Amount:      amount,
+			Type:        models.RecordType(recordType),
+			Note:        note,
+			Balance:     0,
 		})
 
 		if len(batch) >= batchSize {
-			if err = insertBatch(ctx, tx, batch); err != nil {
+			if err = tx.Create(&batch).Error; err != nil {
 				slog.ErrorContext(ctx, "Failed to insert batch", slog.Any("error", err))
 				return
 			}
@@ -201,7 +163,7 @@ func (s *RecordService) ImportCSV(ctx context.Context, src io.Reader) (imported,
 	}
 
 	if len(batch) > 0 {
-		if err = insertBatch(ctx, tx, batch); err != nil {
+		if err = tx.Create(&batch).Error; err != nil {
 			slog.ErrorContext(ctx, "Failed to insert batch", slog.Any("error", err))
 			return
 		}
@@ -213,7 +175,12 @@ func (s *RecordService) ImportCSV(ctx context.Context, src io.Reader) (imported,
 		return
 	}
 
-	if err = tx.Commit(); err != nil {
+	if err = s.updateSummaryTx(ctx, tx); err != nil {
+		slog.ErrorContext(ctx, "Failed to update summary after CSV import", "error", err)
+		return
+	}
+
+	if err = tx.Commit().Error; err != nil {
 		return
 	}
 
@@ -221,15 +188,13 @@ func (s *RecordService) ImportCSV(ctx context.Context, src io.Reader) (imported,
 }
 
 func (s *RecordService) ImportJSON(ctx context.Context, records []models.Record) (imported int, err error) {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return 0, err
+	tx := s.db.WithContext(ctx).Begin()
+	if tx.Error != nil {
+		return 0, tx.Error
 	}
 	defer func() {
 		if err != nil {
-			if rbErr := tx.Rollback(); rbErr != nil {
-				slog.ErrorContext(ctx, "Failed to rollback transaction", "error", rbErr)
-			}
+			tx.Rollback()
 		}
 	}()
 
@@ -247,31 +212,28 @@ func (s *RecordService) ImportJSON(ctx context.Context, records []models.Record)
 			continue
 		}
 
-		var categoryID string
-		if err := tx.QueryRowContext(ctx, `SELECT "ID" FROM categories WHERE name = ?`, category).Scan(&categoryID); err != nil {
-			catID := shortuuid.New()
-			if _, err := tx.ExecContext(ctx, `INSERT INTO categories ("ID", name) VALUES (?, ?)`, catID, category); err != nil {
+		var cat models.Category
+		err = tx.Where("LOWER(name) = ?", category).First(&cat).Error
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				cat = models.Category{
+					ID:   shortuuid.New(),
+					Name: category,
+				}
+				if err = tx.Create(&cat).Error; err != nil {
+					continue
+				}
+			} else {
 				continue
 			}
-			categoryID = catID
 		}
 
-		var currentBalance float64
-		if err := tx.QueryRowContext(ctx, "SELECT COALESCE(balance, 0) FROM records ORDER BY date DESC, id DESC LIMIT 1").Scan(&currentBalance); err != nil {
-			currentBalance = 0
-		}
+		rec.ID = shortuuid.New()
+		rec.Date = date
+		rec.CategoryID = &cat.ID
+		rec.Balance = 0
 
-		switch rec.Type {
-		case "income":
-			currentBalance += rec.Amount
-		case "expense":
-			currentBalance -= rec.Amount
-		}
-
-		customID := shortuuid.New()
-
-		if _, err := tx.ExecContext(ctx, `INSERT INTO records (id, date, description, "categoryID", amount, type, note, balance) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-			customID, date, rec.Description, categoryID, rec.Amount, rec.Type, rec.Note, currentBalance); err != nil {
+		if err = tx.Create(&rec).Error; err != nil {
 			continue
 		}
 
@@ -279,7 +241,7 @@ func (s *RecordService) ImportJSON(ctx context.Context, records []models.Record)
 	}
 
 	if imported == 0 {
-		_ = tx.Rollback()
+		tx.Rollback()
 		return imported, nil
 	}
 
@@ -293,7 +255,7 @@ func (s *RecordService) ImportJSON(ctx context.Context, records []models.Record)
 		return
 	}
 
-	if err = tx.Commit(); err != nil {
+	if err = tx.Commit().Error; err != nil {
 		return
 	}
 

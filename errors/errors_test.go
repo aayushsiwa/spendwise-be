@@ -415,3 +415,9 @@ func TestGetHandlerName_Mocked(t *testing.T) {
 		}
 	})
 }
+
+func TestRuntimeFuncForPC_Nil(t *testing.T) {
+	if runtimeFuncForPC(0) != nil {
+		t.Error("expected runtimeFuncForPC(0) to return nil")
+	}
+}

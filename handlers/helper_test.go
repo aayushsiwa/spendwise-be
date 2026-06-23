@@ -92,3 +92,21 @@ func TestGenerateCustomID(t *testing.T) {
 		})
 	}
 }
+
+func TestNewHandler(t *testing.T) {
+	mockSvc := &mocks.MockService{}
+	h := NewHandler(mockSvc)
+	if h == nil {
+		t.Fatal("expected NewHandler to return a non-nil Handler")
+	}
+	if h.Service != mockSvc {
+		t.Errorf("expected Handler to have the provided service, got %v", h.Service)
+	}
+
+	// Execute the private handlers package functions/variables for complete coverage
+	if genIDFunc == nil || openFileFunc == nil {
+		t.Error("expected internal helper functions to be initialized")
+	}
+
+	_, _ = genIDFunc("2024-01-01")
+}

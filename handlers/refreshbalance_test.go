@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -34,12 +35,11 @@ func TestRecalculateBalances(t *testing.T) {
 			wantBody:   "Balances recalculated successfully",
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(w)
-			c.Request = httptest.NewRequest(http.MethodPost, "/refresh-balance", strings.NewReader(tt.body))
+			c.Request = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/refresh-balance", strings.NewReader(tt.body))
 
 			svc := tt.mock
 			if svc == nil {

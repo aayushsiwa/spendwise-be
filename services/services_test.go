@@ -2,63 +2,47 @@ package services
 
 import (
 	"context"
-	"database/sql"
 	"errors"
-	"os"
+	"strings"
 	"testing"
-
-	_ "modernc.org/sqlite"
 
 	apperrors "aayushsiwa/expense-tracker/errors"
 	"aayushsiwa/expense-tracker/models"
 
 	"github.com/lithammer/shortuuid/v4"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
-func setupTestDB(t *testing.T) *sql.DB {
+func setupTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	db, err := sql.Open("sqlite", ":memory:")
+	gormDB, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("failed to open in-memory db: %v", err)
 	}
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
-	t.Cleanup(func() { _ = db.Close() })
 
-	schema, err := os.ReadFile("../sql/init.sql")
+	err = gormDB.AutoMigrate(
+		&models.Category{},
+		&models.Record{},
+		&models.SummaryDB{},
+		&models.SummaryDetailDB{},
+	)
 	if err != nil {
-		t.Fatalf("failed to read schema: %v", err)
+		t.Fatalf("failed to auto-migrate schema: %v", err)
 	}
-	if _, err := db.Exec(string(schema)); err != nil {
-		t.Fatalf("failed to execute schema: %v", err)
+
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		t.Fatalf("failed to get underlying db: %v", err)
 	}
-	return db
+	t.Cleanup(func() { _ = sqlDB.Close() })
+
+	return gormDB
 }
 
 func isAppErrorType(err error, typ string) bool {
 	var appErr *apperrors.AppError
 	return errors.As(err, &appErr) && appErr.Type == typ
-}
-
-func TestBuildWhereClause(t *testing.T) {
-	t.Run("type filter", func(t *testing.T) {
-		where, args := BuildWhereClause(&models.QueryParams{Type: "income"})
-		if where != " WHERE r.type = ?" {
-			t.Errorf("got %q", where)
-		}
-		if len(args) != 1 || args[0] != models.RecordType("income") {
-			t.Errorf("unexpected args: %v", args)
-		}
-	})
-	t.Run("no filters", func(t *testing.T) {
-		where, args := BuildWhereClause(&models.QueryParams{})
-		if where != "" {
-			t.Errorf("got %q", where)
-		}
-		if len(args) != 0 {
-			t.Errorf("unexpected args: %v", args)
-		}
-	})
 }
 
 func TestCreateCategories(t *testing.T) {
@@ -384,8 +368,8 @@ func TestUpdateSummary(t *testing.T) {
 		}
 
 		// Verify summary is empty
-		var count int
-		err = db.QueryRow("SELECT COUNT(*) FROM summary").Scan(&count)
+		var count int64
+		err = db.Table("summary").Count(&count).Error
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -419,8 +403,8 @@ func TestUpdateSummary(t *testing.T) {
 		}
 
 		// Verify summary rows
-		var count int
-		err = db.QueryRow("SELECT COUNT(*) FROM summary").Scan(&count)
+		var count int64
+		err = db.Table("summary").Count(&count).Error
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -429,7 +413,7 @@ func TestUpdateSummary(t *testing.T) {
 		}
 
 		// Verify summary details rows
-		err = db.QueryRow("SELECT COUNT(*) FROM summary_details").Scan(&count)
+		err = db.Table("summary_details").Count(&count).Error
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -461,7 +445,7 @@ func TestUpdateSummary_Errors(t *testing.T) {
 		db := setupTestDB(t)
 		svc := NewRecordService(db)
 
-		_, _ = db.Exec("DROP TABLE summary")
+		db.Exec("DROP TABLE summary")
 
 		err := svc.UpdateSummary(context.Background())
 		if err == nil {
@@ -476,7 +460,7 @@ func TestUpdateSummary_Errors(t *testing.T) {
 		db := setupTestDB(t)
 		svc := NewRecordService(db)
 
-		_, _ = db.Exec("DROP TABLE summary_details")
+		db.Exec("DROP TABLE summary_details")
 
 		err := svc.UpdateSummary(context.Background())
 		if err == nil {
@@ -491,7 +475,7 @@ func TestUpdateSummary_Errors(t *testing.T) {
 		db := setupTestDB(t)
 		svc := NewRecordService(db)
 
-		_, _ = db.Exec("DROP TABLE records")
+		db.Exec("DROP TABLE records")
 
 		err := svc.UpdateSummary(context.Background())
 		if err == nil {
@@ -519,10 +503,10 @@ func TestUpdateSummary_InsertErrors(t *testing.T) {
 		}
 
 		// Recreate summary with failing check constraint
-		if _, err := db.Exec("DROP TABLE summary"); err != nil {
+		if err := db.Exec("DROP TABLE summary").Error; err != nil {
 			t.Fatalf("failed to drop summary table: %v", err)
 		}
-		if _, err := db.Exec("CREATE TABLE summary (month TEXT PRIMARY KEY CHECK (month = 'invalid'))"); err != nil {
+		if err := db.Exec("CREATE TABLE summary (month TEXT PRIMARY KEY CHECK (month = 'invalid'))").Error; err != nil {
 			t.Fatalf("failed to create mock summary table: %v", err)
 		}
 
@@ -547,16 +531,249 @@ func TestUpdateSummary_InsertErrors(t *testing.T) {
 		}
 
 		// Recreate summary_details with failing check constraint
-		if _, err := db.Exec("DROP TABLE summary_details"); err != nil {
+		if err := db.Exec("DROP TABLE summary_details").Error; err != nil {
 			t.Fatalf("failed to drop summary_details table: %v", err)
 		}
-		if _, err := db.Exec("CREATE TABLE summary_details (month TEXT, type TEXT, categoryID TEXT, categoryName TEXT, amount REAL, PRIMARY KEY (month, type, categoryID), CHECK (amount < 0))"); err != nil {
+		if err := db.Exec("CREATE TABLE summary_details (month TEXT, type TEXT, categoryID TEXT, categoryName TEXT, amount REAL, PRIMARY KEY (month, type, categoryID), CHECK (amount < 0))").Error; err != nil {
 			t.Fatalf("failed to create mock summary_details table: %v", err)
 		}
 
 		err := svc.UpdateSummary(context.Background())
 		if err == nil {
 			t.Error("expected error due to CHECK constraint failure on summary_details table")
+		}
+	})
+}
+
+func TestUpdateCategory(t *testing.T) {
+	db := setupTestDB(t)
+	svc := NewRecordService(db)
+
+	cats, err := svc.CreateCategories(context.Background(), []models.Category{{Name: "Old"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = svc.UpdateCategory(context.Background(), cats[0].ID, &models.Category{Name: "New", Icon: "✨", Color: "#abcdef"})
+	if err != nil {
+		t.Fatalf("failed to update category: %v", err)
+	}
+
+	var updated models.Category
+	if err = db.Where("id = ?", cats[0].ID).First(&updated).Error; err != nil {
+		t.Fatal(err)
+	}
+	if updated.Name != "new" || updated.Icon != "✨" || updated.Color != "#abcdef" {
+		t.Errorf("category not updated properly: %+v", updated)
+	}
+
+	// Update nonexistent
+	err = svc.UpdateCategory(context.Background(), "nonexistent", &models.Category{Name: "No"})
+	if err == nil {
+		t.Error("expected error updating nonexistent category")
+	}
+}
+
+func TestRefreshBalances(t *testing.T) {
+	db := setupTestDB(t)
+	svc := NewRecordService(db)
+
+	if _, err := svc.CreateCategories(context.Background(), []models.Category{{Name: "Food"}}); err != nil {
+		t.Fatal(err)
+	}
+
+	r1 := models.Record{ID: "r1", Date: "2024-01-01", Description: "R1", Category: "Food", Amount: 100, Type: models.Income}
+	r2 := models.Record{ID: "r2", Date: "2024-01-02", Description: "R2", Category: "Food", Amount: 40, Type: models.Expense}
+	if err := svc.CreateRecord(context.Background(), &r1); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.CreateRecord(context.Background(), &r2); err != nil {
+		t.Fatal(err)
+	}
+
+	// Manually mess up balances
+	db.Model(&models.Record{}).Where("1 = 1").Update("balance", 0)
+
+	err := svc.RefreshBalances(context.Background())
+	if err != nil {
+		t.Fatalf("failed to refresh balances: %v", err)
+	}
+
+	var dbR1, dbR2 models.Record
+	db.Where("id = ?", "r1").First(&dbR1)
+	db.Where("id = ?", "r2").First(&dbR2)
+
+	if dbR1.Balance != 100 || dbR2.Balance != 60 {
+		t.Errorf("balances not refreshed correctly: r1=%f, r2=%f", dbR1.Balance, dbR2.Balance)
+	}
+}
+
+func TestGetRecordsAndFilters(t *testing.T) {
+	db := setupTestDB(t)
+	svc := NewRecordService(db)
+
+	if _, err := svc.CreateCategories(context.Background(), []models.Category{{Name: "Food"}, {Name: "Salary"}}); err != nil {
+		t.Fatal(err)
+	}
+
+	_ = svc.CreateRecord(context.Background(), &models.Record{ID: "r1", Date: "2024-01-01", Description: "Lunch", Category: "Food", Amount: 20, Type: models.Expense})
+	_ = svc.CreateRecord(context.Background(), &models.Record{ID: "r2", Date: "2024-01-02", Description: "Payday", Category: "Salary", Amount: 1000, Type: models.Income})
+
+	records, total, err := svc.GetRecords(context.Background(), &models.QueryParams{
+		PaginationFilterParams: models.PaginationFilterParams{Page: 1, Limit: 10},
+		Type:                   "expense",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 1 || len(records) != 1 || records[0].ID != "r1" {
+		t.Errorf("unexpected getrecords result: total=%d, len=%d", total, len(records))
+	}
+
+	// Query with min/max amount and search
+	records, total, err = svc.GetRecords(context.Background(), &models.QueryParams{
+		PaginationFilterParams: models.PaginationFilterParams{Page: 1, Limit: 10},
+		MinAmount:              100,
+		MaxAmount:              2000,
+		Search:                 "pay",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 1 || records[0].ID != "r2" {
+		t.Errorf("unexpected filter result: total=%d", total)
+	}
+}
+
+func TestGetGroupedRecords(t *testing.T) {
+	db := setupTestDB(t)
+	svc := NewRecordService(db)
+
+	if _, err := svc.CreateCategories(context.Background(), []models.Category{{Name: "Food"}, {Name: "Transport"}}); err != nil {
+		t.Fatal(err)
+	}
+
+	_ = svc.CreateRecord(context.Background(), &models.Record{ID: "r1", Date: "2024-01-01", Description: "Lunch", Category: "Food", Amount: 20, Type: models.Expense})
+	_ = svc.CreateRecord(context.Background(), &models.Record{ID: "r2", Date: "2024-01-02", Description: "Bus", Category: "Transport", Amount: 5, Type: models.Expense})
+	_ = svc.CreateRecord(context.Background(), &models.Record{ID: "r3", Date: "2024-02-01", Description: "Dinner", Category: "Food", Amount: 30, Type: models.Expense})
+
+	// Group by category
+	groups, err := svc.GetGroupedRecords(context.Background(), &models.QueryParams{GroupBy: "category"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(groups) != 2 {
+		t.Fatalf("expected 2 groups, got %d", len(groups))
+	}
+
+	// Group by month
+	groups, err = svc.GetGroupedRecords(context.Background(), &models.QueryParams{GroupBy: "month"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(groups) != 2 {
+		t.Fatalf("expected 2 month groups, got %d", len(groups))
+	}
+}
+
+func TestPatchRecord(t *testing.T) {
+	db := setupTestDB(t)
+	svc := NewRecordService(db)
+
+	if _, err := svc.CreateCategories(context.Background(), []models.Category{{Name: "Food"}, {Name: "Other"}}); err != nil {
+		t.Fatal(err)
+	}
+
+	_ = svc.CreateRecord(context.Background(), &models.Record{ID: "r1", Date: "2024-01-01", Description: "Lunch", Category: "Food", Amount: 20, Type: models.Expense})
+
+	newDesc := "Dinner"
+	newAmount := 25.0
+	newCat := "Other"
+	err := svc.PatchRecord(context.Background(), "r1", &models.UpdateRecordRequest{
+		Description: &newDesc,
+		Amount:      &newAmount,
+		Category:    &newCat,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rec, err := svc.GetRecord(context.Background(), "r1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec.Description != "Dinner" || rec.Amount != 25.0 || rec.Category != "other" {
+		t.Errorf("patch didn't apply properly: %+v", rec)
+	}
+}
+
+func TestExportRecords(t *testing.T) {
+	db := setupTestDB(t)
+	svc := NewRecordService(db)
+
+	if _, err := svc.CreateCategories(context.Background(), []models.Category{{Name: "Food"}}); err != nil {
+		t.Fatal(err)
+	}
+	_ = svc.CreateRecord(context.Background(), &models.Record{ID: "r1", Date: "2024-01-01", Description: "Lunch", Category: "Food", Amount: 20, Type: models.Expense})
+
+	recs, err := svc.ExportRecords(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(recs) != 1 || recs[0].ID != "r1" {
+		t.Errorf("export failed: %+v", recs)
+	}
+}
+
+func TestImportCSVAndJSON(t *testing.T) {
+	t.Run("JSON import", func(t *testing.T) {
+		db := setupTestDB(t)
+		svc := NewRecordService(db)
+
+		recs := []models.Record{
+			{Date: "2024-01-01", Description: "Lunch", Category: "Food", Amount: 20, Type: models.Expense},
+			{Date: "2024-01-02", Description: "Salary", Category: "Salary", Amount: 1000, Type: models.Income},
+		}
+
+		imported, err := svc.ImportJSON(context.Background(), recs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if imported != 2 {
+			t.Errorf("expected 2 imported, got %d", imported)
+		}
+
+		var count int64
+		db.Table("records").Count(&count)
+		if count != 2 {
+			t.Errorf("expected 2 records in DB, got %d", count)
+		}
+	})
+
+	t.Run("CSV import", func(t *testing.T) {
+		db := setupTestDB(t)
+		svc := NewRecordService(db)
+
+		// Pre-create categories so mappings match
+		if _, err := svc.CreateCategories(context.Background(), []models.Category{{Name: "Food"}}); err != nil {
+			t.Fatal(err)
+		}
+
+		csvData := "date,description,amount,type,category\n2024-01-01,Lunch,20.0,expense,Food\n2024-01-02,Salary,1000.0,income,Salary\n"
+		reader := strings.NewReader(csvData)
+
+		imported, skipped, err := svc.ImportCSV(context.Background(), reader)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if imported != 2 || skipped != 0 {
+			t.Errorf("unexpected import result: imported=%d, skipped=%d", imported, skipped)
+		}
+
+		var count int64
+		db.Table("records").Count(&count)
+		if count != 2 {
+			t.Errorf("expected 2 records in DB, got %d", count)
 		}
 	})
 }

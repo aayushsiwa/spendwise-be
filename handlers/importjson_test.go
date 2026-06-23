@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -67,13 +68,28 @@ func TestImportJSON(t *testing.T) {
 			wantStatus: http.StatusCreated,
 			wantBody:   `"recordsImported":2`,
 		},
+		{
+			name: "success but update summary fails",
+			body: func() string {
+				records := []models.Record{
+					{Date: "2024-01-01", Description: "Salary", Category: "income", Amount: 3000.0, Type: "income"},
+				}
+				b, _ := json.Marshal(records)
+				return string(b)
+			}(),
+			mock: &mocks.MockService{
+				UpdateSummaryErr: fmt.Errorf("update summary failed"),
+			},
+			wantStatus: http.StatusCreated,
+			wantBody:   `"recordsImported":1`,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(w)
-			c.Request = httptest.NewRequest(http.MethodPost, "/import/json", strings.NewReader(tt.body))
+			c.Request = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/import/json", strings.NewReader(tt.body))
 			c.Request.Header.Set("Content-Type", "application/json")
 
 			svc := tt.mock

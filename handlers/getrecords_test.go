@@ -4,90 +4,15 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"strings"
 	"testing"
 
 	apperrors "aayushsiwa/expense-tracker/errors"
 	"aayushsiwa/expense-tracker/mocks"
 	"aayushsiwa/expense-tracker/models"
-	"aayushsiwa/expense-tracker/services"
 
 	"github.com/gin-gonic/gin"
 )
-
-func Test_buildWhereClause(t *testing.T) {
-	type args struct {
-		q *models.QueryParams
-	}
-	tests := []struct {
-		name  string
-		args  args
-		want  string
-		want1 []any
-	}{
-		{
-			name:  "no filters returns empty clause",
-			args:  args{q: &models.QueryParams{}},
-			want:  "",
-			want1: []any{},
-		},
-		{
-			name:  "type filter",
-			args:  args{q: &models.QueryParams{Type: "income"}},
-			want:  " WHERE r.type = ?",
-			want1: []any{models.RecordType("income")},
-		},
-		{
-			name:  "category filter",
-			args:  args{q: &models.QueryParams{Category: "food"}},
-			want:  " WHERE c.name = ?",
-			want1: []any{"food"},
-		},
-		{
-			name: "from and to date range",
-			args: args{q: &models.QueryParams{
-				PaginationFilterParams: models.PaginationFilterParams{},
-				From:                   "2024-01-01",
-				To:                     "2024-12-31",
-			}},
-			want:  " WHERE r.date >= ? AND r.date <= ?",
-			want1: []any{"2024-01-01", "2024-12-31"},
-		},
-		{
-			name:  "min and max amount",
-			args:  args{q: &models.QueryParams{MinAmount: 10.0, MaxAmount: 100.0}},
-			want:  " WHERE r.amount >= ? AND r.amount <= ?",
-			want1: []any{10.0, 100.0},
-		},
-		{
-			name:  "search term is lowercased and wrapped in wildcards",
-			args:  args{q: &models.QueryParams{Search: "Grocery"}},
-			want:  " WHERE LOWER(r.description) LIKE ?",
-			want1: []any{"%grocery%"},
-		},
-		{
-			name: "multiple filters combined",
-			args: args{q: &models.QueryParams{
-				Type:     "expense",
-				Category: "food",
-			}},
-			want:  " WHERE r.type = ? AND c.name = ?",
-			want1: []any{models.RecordType("expense"), "food"},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, got1 := services.BuildWhereClause(tt.args.q)
-			if got != tt.want {
-				t.Errorf("buildWhereClause() got = %q, want %q", got, tt.want)
-			}
-			if !reflect.DeepEqual(got1, tt.want1) {
-				t.Errorf("buildWhereClause() got1 = %v, want %v", got1, tt.want1)
-			}
-		})
-	}
-}
 
 func TestGetRecords(t *testing.T) {
 	recs := []models.Record{
