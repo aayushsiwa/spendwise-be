@@ -16,8 +16,7 @@ func (h *Handler) CreateCategories(c *gin.Context) {
 	var categories []models.Category
 
 	if err := c.BindJSON(&categories); err != nil {
-		appErr := errors.NewInvalidInput("Invalid JSON body", err)
-		errors.HandleError(c, appErr)
+		errors.HandleBindingError(c, err, "Invalid JSON body")
 		return
 	}
 

@@ -22,7 +22,7 @@ func (h *Handler) PatchRecord(c *gin.Context) {
 
 	var req models.UpdateRecordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		appErrors.HandleError(c, appErrors.NewInvalidInput("Invalid JSON body", err))
+		appErrors.HandleBindingError(c, err, "Invalid JSON body")
 		return
 	}
 

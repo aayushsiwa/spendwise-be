@@ -13,7 +13,7 @@ import (
 func (h *Handler) ImportJSON(c *gin.Context) {
 	var records []models.Record
 	if err := c.ShouldBindJSON(&records); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON array"})
+		errors.HandleBindingError(c, err, "Invalid JSON array")
 		return
 	}
 
