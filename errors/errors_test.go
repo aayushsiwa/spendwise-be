@@ -451,146 +451,154 @@ func TestFriendlyTypeName(t *testing.T) {
 	}
 }
 
-func TestParseBindingError_UnmarshalTypeError(t *testing.T) {
-	err := &json.UnmarshalTypeError{
-		Field:  "Amount",
-		Value:  "string",
-		Type:   reflect.TypeFor[float64](),
-		Offset: 10,
-		Struct: "Record",
+func TestParseBindingError(t *testing.T) {
+	tests := []struct {
+		name   string
+		err    error
+		wantOK bool
+		check  func(t *testing.T, ves ValidationErrors)
+	}{
+		{
+			name: "field type mismatch",
+			err: &json.UnmarshalTypeError{
+				Field: "Amount", Value: "string", Type: reflect.TypeFor[float64](),
+			},
+			wantOK: true,
+			check: func(t *testing.T, ves ValidationErrors) {
+				if len(ves) != 1 {
+					t.Fatalf("got %d errors, want 1", len(ves))
+				}
+				if ves[0].Field != "amount" {
+					t.Errorf("Field = %q, want %q", ves[0].Field, "amount")
+				}
+				if ves[0].Message != "Expected number but got string" {
+					t.Errorf("Message = %q, want %q", ves[0].Message, "Expected number but got string")
+				}
+				if ves[0].Value != "string" {
+					t.Errorf("Value = %v, want %v", ves[0].Value, "string")
+				}
+			},
+		},
+		{
+			name: "object into array",
+			err: &json.UnmarshalTypeError{
+				Field: "", Value: "object", Type: reflect.TypeOf([]struct{}{}),
+			},
+			wantOK: true,
+			check: func(t *testing.T, ves ValidationErrors) {
+				if len(ves) != 1 {
+					t.Fatalf("got %d errors, want 1", len(ves))
+				}
+				if ves[0].Field != "" {
+					t.Errorf("Field = %q, want empty", ves[0].Field)
+				}
+				if ves[0].Message != "Expected array but got object" {
+					t.Errorf("Message = %q, want %q", ves[0].Message, "Expected array but got object")
+				}
+			},
+		},
+		{
+			name:   "malformed JSON",
+			err:    &json.SyntaxError{Offset: 5},
+			wantOK: true,
+			check: func(t *testing.T, ves ValidationErrors) {
+				if len(ves) != 1 {
+					t.Fatalf("got %d errors, want 1", len(ves))
+				}
+				if ves[0].Field != "body" {
+					t.Errorf("Field = %q, want %q", ves[0].Field, "body")
+				}
+				if ves[0].Message != "Malformed JSON in request body" {
+					t.Errorf("Message = %q, want %q", ves[0].Message, "Malformed JSON in request body")
+				}
+			},
+		},
+		{
+			name:   "validator tag errors",
+			err:    validator.New().Var(0, "required"),
+			wantOK: true,
+			check: func(t *testing.T, ves ValidationErrors) {
+				if len(ves) == 0 {
+					t.Fatal("expected at least one validation error")
+				}
+			},
+		},
+		{
+			name:   "unknown error",
+			err:    errors.New("unknown error"),
+			wantOK: false,
+			check: func(t *testing.T, ves ValidationErrors) {
+				if ves != nil {
+					t.Error("expected nil ValidationErrors")
+				}
+			},
+		},
 	}
-	ves, ok := ParseBindingError(err)
-	if !ok {
-		t.Fatal("ParseBindingError returned ok=false")
-	}
-	if len(ves) != 1 {
-		t.Fatalf("got %d errors, want 1", len(ves))
-	}
-	if ves[0].Field != "amount" {
-		t.Errorf("Field = %q, want %q", ves[0].Field, "amount")
-	}
-	if ves[0].Message != "Expected number but got string" {
-		t.Errorf("Message = %q, want %q", ves[0].Message, "Expected number but got string")
-	}
-	if ves[0].Value != "string" {
-		t.Errorf("Value = %v, want %v", ves[0].Value, "string")
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ves, ok := ParseBindingError(tt.err)
+			if ok != tt.wantOK {
+				t.Fatalf("ok = %v, want %v", ok, tt.wantOK)
+			}
+			if tt.check != nil {
+				tt.check(t, ves)
+			}
+		})
 	}
 }
 
-func TestParseBindingError_UnmarshalTypeError_ObjectIntoArray(t *testing.T) {
-	err := &json.UnmarshalTypeError{
-		Field:  "",
-		Value:  "object",
-		Type:   reflect.TypeOf([]struct{}{}),
-		Offset: 1,
+func TestHandleBindingError(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		message  string
+		wantType string
+		wantMsg  string
+	}{
+		{
+			name: "parseable unmarshal type error",
+			err: &json.UnmarshalTypeError{
+				Field: "Amount", Value: "string", Type: reflect.TypeFor[float64](),
+			},
+			message:  "Invalid request body",
+			wantType: "validation_error",
+		},
+		{
+			name:     "fallback unknown error",
+			err:      errors.New("something went wrong"),
+			message:  "Custom message",
+			wantType: "invalid_input",
+			wantMsg:  "Custom message",
+		},
 	}
-	ves, ok := ParseBindingError(err)
-	if !ok {
-		t.Fatal("ParseBindingError returned ok=false")
-	}
-	if len(ves) != 1 {
-		t.Fatalf("got %d errors, want 1", len(ves))
-	}
-	if ves[0].Field != "" {
-		t.Errorf("Field = %q, want empty", ves[0].Field)
-	}
-	if ves[0].Message != "Expected array but got object" {
-		t.Errorf("Message = %q, want %q", ves[0].Message, "Expected array but got object")
-	}
-}
 
-func TestParseBindingError_SyntaxError(t *testing.T) {
-	err := &json.SyntaxError{Offset: 5}
-	ves, ok := ParseBindingError(err)
-	if !ok {
-		t.Fatal("ParseBindingError returned ok=false")
-	}
-	if len(ves) != 1 {
-		t.Fatalf("got %d errors, want 1", len(ves))
-	}
-	if ves[0].Field != "body" {
-		t.Errorf("Field = %q, want %q", ves[0].Field, "body")
-	}
-	if ves[0].Message != "Malformed JSON in request body" {
-		t.Errorf("Message = %q, want %q", ves[0].Message, "Malformed JSON in request body")
-	}
-}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gin.SetMode(gin.TestMode)
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/", nil)
 
-func TestParseBindingError_ValidatorErrors(t *testing.T) {
-	validate := validator.New()
-	err := validate.Var(0, "required")
-	ves, ok := ParseBindingError(err)
-	if !ok {
-		t.Fatal("ParseBindingError returned ok=false")
-	}
-	if len(ves) == 0 {
-		t.Fatal("expected at least one validation error")
-	}
-}
+			HandleBindingError(c, tt.err, tt.message)
 
-func TestParseBindingError_UnknownError(t *testing.T) {
-	ves, ok := ParseBindingError(errors.New("unknown error"))
-	if ok {
-		t.Fatal("ParseBindingError should return ok=false for unknown errors")
-	}
-	if ves != nil {
-		t.Fatal("ParseBindingError should return nil for unknown errors")
-	}
-}
-
-func TestHandleBindingError_Parseable(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/", nil)
-
-	bindErr := &json.UnmarshalTypeError{
-		Field: "Amount",
-		Value: "string",
-		Type:  reflect.TypeFor[float64](),
-	}
-	HandleBindingError(c, bindErr, "Invalid request body")
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d", w.Code, http.StatusBadRequest)
-	}
-	var body map[string]any
-	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
-		t.Fatal(err)
-	}
-	errorObj, ok := body["error"].(map[string]any)
-	if !ok {
-		t.Fatal("response missing 'error' key")
-	}
-	if errorObj["type"] != "validation_error" {
-		t.Errorf("error.type = %v, want validation_error", errorObj["type"])
-	}
-}
-
-func TestHandleBindingError_Fallback(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/", nil)
-
-	bindErr := errors.New("something went wrong")
-	HandleBindingError(c, bindErr, "Custom message")
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d", w.Code, http.StatusBadRequest)
-	}
-	var body map[string]any
-	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
-		t.Fatal(err)
-	}
-	errorObj, ok := body["error"].(map[string]any)
-	if !ok {
-		t.Fatal("response missing 'error' key")
-	}
-	if errorObj["type"] != "invalid_input" {
-		t.Errorf("error.type = %v, want invalid_input", errorObj["type"])
-	}
-	if errorObj["message"] != "Custom message" {
-		t.Errorf("error.message = %v, want %q", errorObj["message"], "Custom message")
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want %d", w.Code, http.StatusBadRequest)
+			}
+			var body map[string]any
+			if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+				t.Fatal(err)
+			}
+			errorObj, ok := body["error"].(map[string]any)
+			if !ok {
+				t.Fatal("response missing 'error' key")
+			}
+			if errorObj["type"] != tt.wantType {
+				t.Errorf("error.type = %v, want %v", errorObj["type"], tt.wantType)
+			}
+			if tt.wantMsg != "" && errorObj["message"] != tt.wantMsg {
+				t.Errorf("error.message = %v, want %q", errorObj["message"], tt.wantMsg)
+			}
+		})
 	}
 }

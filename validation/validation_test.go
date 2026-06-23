@@ -8,30 +8,70 @@ import (
 )
 
 func TestNewValidator(t *testing.T) {
-	v := NewValidator()
-	if v == nil {
-		t.Fatal("NewValidator() returned nil")
+	tests := []struct {
+		name  string
+		check func(t *testing.T, v *Validator)
+	}{
+		{
+			name: "returns non-nil with initialized errors",
+			check: func(t *testing.T, v *Validator) {
+				if v == nil {
+					t.Fatal("NewValidator() returned nil")
+				}
+				if v.errors == nil {
+					t.Fatal("errors slice not initialized")
+				}
+			},
+		},
 	}
-	if v.errors == nil {
-		t.Fatal("errors slice not initialized")
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.check(t, NewValidator())
+		})
 	}
 }
 
 func TestHasErrors_GetErrors(t *testing.T) {
-	v := NewValidator()
-	if v.HasErrors() {
-		t.Error("fresh validator should not have errors")
-	}
-	if len(v.GetErrors()) != 0 {
-		t.Error("fresh validator GetErrors should be empty")
+	tests := []struct {
+		name  string
+		setup func(v *Validator)
+		check func(t *testing.T, v *Validator)
+	}{
+		{
+			name:  "fresh validator has no errors",
+			setup: func(v *Validator) {},
+			check: func(t *testing.T, v *Validator) {
+				if v.HasErrors() {
+					t.Error("fresh validator should not have errors")
+				}
+				if len(v.GetErrors()) != 0 {
+					t.Error("fresh validator GetErrors should be empty")
+				}
+			},
+		},
+		{
+			name: "after adding error reports correctly",
+			setup: func(v *Validator) {
+				v.errors = append(v.errors, errors.NewValidationError("x", "err", ""))
+			},
+			check: func(t *testing.T, v *Validator) {
+				if !v.HasErrors() {
+					t.Error("should have errors after adding one")
+				}
+				if len(v.GetErrors()) != 1 {
+					t.Error("GetErrors should return 1 error")
+				}
+			},
+		},
 	}
 
-	v.errors = append(v.errors, errors.NewValidationError("x", "err", ""))
-	if !v.HasErrors() {
-		t.Error("should have errors after adding one")
-	}
-	if len(v.GetErrors()) != 1 {
-		t.Error("GetErrors should return 1 error")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := NewValidator()
+			tt.setup(v)
+			tt.check(t, v)
+		})
 	}
 }
 
