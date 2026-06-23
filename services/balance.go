@@ -5,7 +5,6 @@ import (
 	"log/slog"
 
 	"aayushsiwa/expense-tracker/errors"
-	"aayushsiwa/expense-tracker/models"
 
 	"gorm.io/gorm"
 )
@@ -29,27 +28,21 @@ func (s *RecordService) RefreshBalances(ctx context.Context) error {
 	return nil
 }
 
-// recalculateBalances updates all records' balance values to reflect cumulative running totals computed in chronological order.
+// recalculateBalances updates all records' balance values to cumulative running totals in a single query.
 func recalculateBalances(ctx context.Context, tx *gorm.DB) error {
-	var records []models.Record
-	err := tx.Select("id, date, amount, type").Order("date ASC, id ASC").Find(&records).Error
-	if err != nil {
-		return err
-	}
-
-	var runningBalance float64
-	for i := range records {
-		if records[i].Type == models.Income {
-			runningBalance += records[i].Amount
-		} else {
-			runningBalance -= records[i].Amount
-		}
-
-		err = tx.Model(&models.Record{}).Where("id = ?", records[i].ID).Update("balance", runningBalance).Error
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+	const query = `
+		WITH ordered_balances AS (
+			SELECT id,
+				SUM(CASE WHEN type = 'income' THEN amount ELSE -amount END)
+					OVER (ORDER BY date ASC, id ASC) AS running_balance
+			FROM records
+		)
+		UPDATE records
+		SET balance = (
+			SELECT running_balance
+			FROM ordered_balances
+			WHERE ordered_balances.id = records.id
+		)
+	`
+	return tx.WithContext(ctx).Exec(query).Error
 }

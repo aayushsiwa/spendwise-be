@@ -2,11 +2,12 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
 
-	"aayushsiwa/expense-tracker/errors"
+	apperrors "aayushsiwa/expense-tracker/errors"
 	"aayushsiwa/expense-tracker/models"
 
 	"gorm.io/gorm"
@@ -16,17 +17,17 @@ func (s *RecordService) CreateRecord(ctx context.Context, rec *models.Record) er
 	var category models.Category
 	err := s.db.WithContext(ctx).Where("name = ?", strings.ToLower(rec.Category)).First(&category).Error
 	if err != nil {
-		if gorm.ErrRecordNotFound == err {
-			return errors.NewInvalidInput("Category not found", err).WithDetails(map[string]any{
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return apperrors.NewInvalidInput("Category not found", err).WithDetails(map[string]any{
 				"category": rec.Category,
 			})
 		}
-		return errors.NewDatabase("Failed to find category", err)
+		return apperrors.NewDatabase("Failed to find category", err)
 	}
 
 	tx := s.db.WithContext(ctx).Begin()
 	if tx.Error != nil {
-		return errors.NewDatabase("Failed to begin transaction", tx.Error)
+		return apperrors.NewDatabase("Failed to begin transaction", tx.Error)
 	}
 
 	rec.CategoryID = &category.ID
@@ -34,12 +35,12 @@ func (s *RecordService) CreateRecord(ctx context.Context, rec *models.Record) er
 
 	if err := tx.Create(rec).Error; err != nil {
 		tx.Rollback()
-		return errors.NewDatabase("Failed to insert record", err)
+		return apperrors.NewDatabase("Failed to insert record", err)
 	}
 
 	if err = recalculateBalances(ctx, tx); err != nil {
 		tx.Rollback()
-		return errors.NewDatabase("Failed to recalculate balances", err)
+		return apperrors.NewDatabase("Failed to recalculate balances", err)
 	}
 
 	if err = s.updateSummaryTx(ctx, tx); err != nil {
@@ -49,7 +50,7 @@ func (s *RecordService) CreateRecord(ctx context.Context, rec *models.Record) er
 	}
 
 	if err = tx.Commit().Error; err != nil {
-		return errors.NewDatabase("Failed to commit transaction", err)
+		return apperrors.NewDatabase("Failed to commit transaction", err)
 	}
 
 	return nil
@@ -63,10 +64,10 @@ func (s *RecordService) GetRecord(ctx context.Context, id string) (*models.Recor
 		Where("records.id = ?", id).
 		First(&rec).Error
 	if err != nil {
-		if gorm.ErrRecordNotFound == err {
-			return nil, errors.NewNotFound(fmt.Sprintf("Record with ID %s not found", id), err)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperrors.NewNotFound(fmt.Sprintf("Record with ID %s not found", id), err)
 		}
-		return nil, errors.NewDatabase("Failed to read record", err)
+		return nil, apperrors.NewDatabase("Failed to read record", err)
 	}
 	return &rec, nil
 }
@@ -109,7 +110,7 @@ func (s *RecordService) GetRecords(ctx context.Context, params *models.QueryPara
 
 	err := dbQuery.Count(&totalCount).Error
 	if err != nil {
-		return nil, 0, errors.NewDatabase("Failed to count records", err)
+		return nil, 0, apperrors.NewDatabase("Failed to count records", err)
 	}
 
 	err = dbQuery.Select("records.*, COALESCE(categories.name, '') as category").
@@ -118,7 +119,7 @@ func (s *RecordService) GetRecords(ctx context.Context, params *models.QueryPara
 		Offset(offset).
 		Find(&records).Error
 	if err != nil {
-		return nil, 0, errors.NewDatabase("Failed to retrieve records", err)
+		return nil, 0, apperrors.NewDatabase("Failed to retrieve records", err)
 	}
 
 	return records, int(totalCount), nil
@@ -146,7 +147,7 @@ func (s *RecordService) GetGroupedRecords(ctx context.Context, params *models.Qu
 	case "month":
 		groupExpr = getMonthExpression(dialect, "records.date")
 	default:
-		return nil, errors.NewInvalidInput("Invalid groupBy value", nil)
+		return nil, apperrors.NewInvalidInput("Invalid groupBy value", nil)
 	}
 
 	dbQuery := s.db.WithContext(ctx).Table("records").
@@ -160,7 +161,7 @@ func (s *RecordService) GetGroupedRecords(ctx context.Context, params *models.Qu
 		Order("total DESC").
 		Scan(&groups).Error
 	if err != nil {
-		return nil, errors.NewDatabase("Failed to retrieve grouped records", err)
+		return nil, apperrors.NewDatabase("Failed to retrieve grouped records", err)
 	}
 
 	return groups, nil
@@ -169,17 +170,17 @@ func (s *RecordService) GetGroupedRecords(ctx context.Context, params *models.Qu
 func (s *RecordService) PatchRecord(ctx context.Context, id string, req *models.UpdateRecordRequest) error {
 	tx := s.db.WithContext(ctx).Begin()
 	if tx.Error != nil {
-		return errors.NewDatabase("Failed to begin transaction", tx.Error)
+		return apperrors.NewDatabase("Failed to begin transaction", tx.Error)
 	}
 
 	var rec models.Record
 	err := tx.Where("id = ?", id).First(&rec).Error
 	if err != nil {
 		tx.Rollback()
-		if gorm.ErrRecordNotFound == err {
-			return errors.NewNotFound(fmt.Sprintf("Record with ID %s not found", id), nil)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return apperrors.NewNotFound(fmt.Sprintf("Record with ID %s not found", id), nil)
 		}
-		return errors.NewDatabase("Failed to find record", err)
+		return apperrors.NewDatabase("Failed to find record", err)
 	}
 
 	updates := make(map[string]any)
@@ -203,12 +204,12 @@ func (s *RecordService) PatchRecord(ctx context.Context, id string, req *models.
 		err := tx.Where("name = ?", strings.ToLower(*req.Category)).First(&category).Error
 		if err != nil {
 			tx.Rollback()
-			if gorm.ErrRecordNotFound == err {
-				return errors.NewInvalidInput("Category not found", err).WithDetails(map[string]any{
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return apperrors.NewInvalidInput("Category not found", err).WithDetails(map[string]any{
 					"category": *req.Category,
 				})
 			}
-			return errors.NewDatabase("Failed to find category", err)
+			return apperrors.NewDatabase("Failed to find category", err)
 		}
 		updates["categoryID"] = category.ID
 	}
@@ -217,12 +218,12 @@ func (s *RecordService) PatchRecord(ctx context.Context, id string, req *models.
 		err = tx.Model(&models.Record{}).Where("id = ?", id).Updates(updates).Error
 		if err != nil {
 			tx.Rollback()
-			return errors.NewDatabase("Failed to update record", err)
+			return apperrors.NewDatabase("Failed to update record", err)
 		}
 
 		if err = recalculateBalances(ctx, tx); err != nil {
 			tx.Rollback()
-			return errors.NewDatabase("Failed to recalculate balances", err)
+			return apperrors.NewDatabase("Failed to recalculate balances", err)
 		}
 
 		if err = s.updateSummaryTx(ctx, tx); err != nil {
@@ -233,7 +234,7 @@ func (s *RecordService) PatchRecord(ctx context.Context, id string, req *models.
 	}
 
 	if err = tx.Commit().Error; err != nil {
-		return errors.NewDatabase("Failed to commit transaction", err)
+		return apperrors.NewDatabase("Failed to commit transaction", err)
 	}
 
 	return nil
@@ -242,23 +243,23 @@ func (s *RecordService) PatchRecord(ctx context.Context, id string, req *models.
 func (s *RecordService) DeleteRecord(ctx context.Context, id string) (int64, error) {
 	tx := s.db.WithContext(ctx).Begin()
 	if tx.Error != nil {
-		return 0, errors.NewDatabase("Failed to begin transaction", tx.Error)
+		return 0, apperrors.NewDatabase("Failed to begin transaction", tx.Error)
 	}
 
 	res := tx.Where("id = ?", id).Delete(&models.Record{})
 	if res.Error != nil {
 		tx.Rollback()
-		return 0, errors.NewDatabase("Failed to delete record", res.Error)
+		return 0, apperrors.NewDatabase("Failed to delete record", res.Error)
 	}
 
 	if res.RowsAffected == 0 {
 		tx.Rollback()
-		return 0, errors.NewNotFound(fmt.Sprintf("Record with ID %s not found", id), nil)
+		return 0, apperrors.NewNotFound(fmt.Sprintf("Record with ID %s not found", id), nil)
 	}
 
 	if err := recalculateBalances(ctx, tx); err != nil {
 		tx.Rollback()
-		return 0, errors.NewDatabase("Failed to recalculate balances", err)
+		return 0, apperrors.NewDatabase("Failed to recalculate balances", err)
 	}
 
 	if err := s.updateSummaryTx(ctx, tx); err != nil {
@@ -268,7 +269,7 @@ func (s *RecordService) DeleteRecord(ctx context.Context, id string) (int64, err
 	}
 
 	if err := tx.Commit().Error; err != nil {
-		return 0, errors.NewDatabase("Failed to commit transaction", err)
+		return 0, apperrors.NewDatabase("Failed to commit transaction", err)
 	}
 
 	return res.RowsAffected, nil
@@ -282,7 +283,7 @@ func (s *RecordService) ExportRecords(ctx context.Context) ([]models.Record, err
 		Order("records.date DESC").
 		Find(&records).Error
 	if err != nil {
-		return nil, errors.NewDatabase("Failed to export records", err)
+		return nil, apperrors.NewDatabase("Failed to export records", err)
 	}
 	return records, nil
 }

@@ -1,6 +1,7 @@
 package errors
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -87,7 +88,7 @@ func (e *AppError) Log() {
 		attrs = append(attrs, k, v)
 	}
 
-	slog.Error("application error", attrs...)
+	slog.ErrorContext(context.Background(), "application error", attrs...)
 }
 
 // Helper functions for common error types

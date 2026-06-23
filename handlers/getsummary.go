@@ -22,7 +22,7 @@ func (h *Handler) GetSummary(c *gin.Context) {
 		return
 	}
 
-	slog.Info("Summary retrieved successfully",
+	slog.InfoContext(c.Request.Context(), "Summary retrieved successfully",
 		"from", from, "to", to,
 		"totalIncome", summary.TotalIncome,
 		"totalExpense", summary.TotalExpense,

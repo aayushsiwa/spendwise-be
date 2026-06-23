@@ -16,12 +16,12 @@ import (
 
 func setupTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	gormDB, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("failed to open in-memory db: %v", err)
 	}
 
-	err = db.AutoMigrate(
+	err = gormDB.AutoMigrate(
 		&models.Category{},
 		&models.Record{},
 		&models.SummaryDB{},
@@ -30,7 +30,14 @@ func setupTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("failed to auto-migrate schema: %v", err)
 	}
-	return db
+
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		t.Fatalf("failed to get underlying db: %v", err)
+	}
+	t.Cleanup(func() { _ = sqlDB.Close() })
+
+	return gormDB
 }
 
 func isAppErrorType(err error, typ string) bool {

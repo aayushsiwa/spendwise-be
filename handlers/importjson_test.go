@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -88,7 +89,7 @@ func TestImportJSON(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(w)
-			c.Request = httptest.NewRequest(http.MethodPost, "/import/json", strings.NewReader(tt.body))
+			c.Request = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/import/json", strings.NewReader(tt.body))
 			c.Request.Header.Set("Content-Type", "application/json")
 
 			svc := tt.mock

@@ -58,6 +58,6 @@ func (h *Handler) CreateCategories(c *gin.Context) {
 			"color": cat.Color,
 		})
 	}
-	slog.Info("Categories created successfully", "count", len(inserted))
+	slog.InfoContext(c.Request.Context(), "Categories created successfully", "count", len(inserted))
 	c.JSON(http.StatusCreated, insertedRes)
 }

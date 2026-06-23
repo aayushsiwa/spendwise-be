@@ -37,6 +37,6 @@ func (h *Handler) PatchRecord(c *gin.Context) {
 		return
 	}
 
-	slog.Info("Record updated successfully", "record_id", id)
+	slog.InfoContext(c.Request.Context(), "Record updated successfully", "record_id", id)
 	c.JSON(http.StatusOK, gin.H{"message": "Record updated", "ID": id})
 }

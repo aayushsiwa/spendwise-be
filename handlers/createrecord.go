@@ -39,7 +39,7 @@ func (h *Handler) CreateRecord(c *gin.Context) {
 		return
 	}
 
-	slog.Info("Record created successfully", "record_id", rec.ID)
+	slog.InfoContext(c.Request.Context(), "Record created successfully", "record_id", rec.ID)
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "Record with id " + rec.ID + " created successfully",
 		"ID":      rec.ID,

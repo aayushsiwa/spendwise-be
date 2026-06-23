@@ -26,6 +26,6 @@ func (h *Handler) DeleteCategory(c *gin.Context) {
 		return
 	}
 
-	slog.Info("Category deleted successfully", "categoryID", id)
+	slog.InfoContext(c.Request.Context(), "Category deleted successfully", "categoryID", id)
 	c.JSON(http.StatusNoContent, nil)
 }

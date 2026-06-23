@@ -175,6 +175,11 @@ func (s *RecordService) ImportCSV(ctx context.Context, src io.Reader) (imported,
 		return
 	}
 
+	if err = s.updateSummaryTx(ctx, tx); err != nil {
+		slog.ErrorContext(ctx, "Failed to update summary after CSV import", "error", err)
+		return
+	}
+
 	if err = tx.Commit().Error; err != nil {
 		return
 	}
@@ -208,7 +213,7 @@ func (s *RecordService) ImportJSON(ctx context.Context, records []models.Record)
 		}
 
 		var cat models.Category
-		err = tx.Where("name = ?", category).First(&cat).Error
+		err = tx.Where("LOWER(name) = ?", category).First(&cat).Error
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				cat = models.Category{

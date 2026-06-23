@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -87,7 +88,7 @@ func TestAttachRoutes(t *testing.T) {
 	AttachRoutes(group, routes)
 
 	t.Run("GET /api/v1/ping", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/ping", nil)
 		w := httptest.NewRecorder()
 		engine.ServeHTTP(w, req)
 
@@ -100,7 +101,7 @@ func TestAttachRoutes(t *testing.T) {
 	})
 
 	t.Run("POST /api/v1/echo", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/echo", nil)
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/echo", nil)
 		w := httptest.NewRecorder()
 		engine.ServeHTTP(w, req)
 
@@ -113,7 +114,7 @@ func TestAttachRoutes(t *testing.T) {
 	})
 
 	t.Run("404 wrong method", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/ping", nil)
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/ping", nil)
 		w := httptest.NewRecorder()
 		engine.ServeHTTP(w, req)
 
@@ -123,7 +124,7 @@ func TestAttachRoutes(t *testing.T) {
 	})
 
 	t.Run("404 unknown route", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/unknown", nil)
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/unknown", nil)
 		w := httptest.NewRecorder()
 		engine.ServeHTTP(w, req)
 
@@ -159,7 +160,7 @@ func TestHealthCheck(t *testing.T) {
 		r.GET(hcRoute.Pattern, hcRoute.HandlerFunc)
 
 		w := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/health", nil)
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/health", nil)
 		r.ServeHTTP(w, req)
 
 		if w.Code != http.StatusServiceUnavailable {
@@ -172,6 +173,11 @@ func TestHealthCheck(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to open test db: %v", err)
 		}
+		sqlDB, err := testDb.DB()
+		if err != nil {
+			t.Fatalf("failed to get underlying db: %v", err)
+		}
+		defer func() { _ = sqlDB.Close() }()
 		db.DB = testDb
 
 		r := gin.New()
@@ -187,7 +193,7 @@ func TestHealthCheck(t *testing.T) {
 		r.GET(hcRoute.Pattern, hcRoute.HandlerFunc)
 
 		w := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/health", nil)
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/health", nil)
 		r.ServeHTTP(w, req)
 
 		if w.Code != http.StatusOK {

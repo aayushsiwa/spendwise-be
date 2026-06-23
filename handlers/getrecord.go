@@ -26,6 +26,6 @@ func (h *Handler) GetRecord(c *gin.Context) {
 		return
 	}
 
-	slog.Info("Record retrieved successfully", "record_id", rec.ID)
+	slog.InfoContext(c.Request.Context(), "Record retrieved successfully", "record_id", rec.ID)
 	c.JSON(http.StatusOK, rec)
 }

@@ -29,7 +29,7 @@ func buildCSVUploadRequest(t *testing.T, content string) *http.Request {
 		t.Fatalf("failed to write csv content: %v", err)
 	}
 	_ = writer.Close()
-	req := httptest.NewRequest(http.MethodPost, "/import/csv", body)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/import/csv", body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	return req
 }
@@ -44,7 +44,7 @@ func buildLargeCSVUploadRequest(t *testing.T) *http.Request {
 		_, _ = io.WriteString(part, chunk)
 	}
 	_ = writer.Close()
-	req := httptest.NewRequest(http.MethodPost, "/import/csv", body)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/import/csv", body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	return req
 }
@@ -133,7 +133,7 @@ func TestImportCSV(t *testing.T) {
 			if tt.buildReq != nil {
 				c.Request = tt.buildReq(t)
 			} else {
-				c.Request = httptest.NewRequest(http.MethodPost, "/import/csv", strings.NewReader(tt.body))
+				c.Request = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/import/csv", strings.NewReader(tt.body))
 				c.Request.Header.Set("Content-Type", "application/json")
 			}
 

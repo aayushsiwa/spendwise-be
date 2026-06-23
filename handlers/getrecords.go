@@ -47,7 +47,7 @@ func (h *Handler) GetRecords(c *gin.Context) {
 	hasNext := queryParams.Page < totalPages
 	hasPrev := queryParams.Page > 1
 
-	slog.Info("Records retrieved successfully",
+	slog.InfoContext(c.Request.Context(), "Records retrieved successfully",
 		"count", len(records),
 		"page", queryParams.Page,
 		"limit", queryParams.Limit,

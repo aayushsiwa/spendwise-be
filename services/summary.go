@@ -202,7 +202,7 @@ func (s *RecordService) GetSummary(ctx context.Context, from, to, categoryFilter
 	}
 	var details []SummaryDetailAgg
 
-	err = dbQuery.Group("categories.ID, records.type").
+	err = dbQuery.Group("categories.ID, categories.name, records.type").
 		Order("records.type, SUM(records.amount) DESC").
 		Scan(&details).Error
 	if err != nil {

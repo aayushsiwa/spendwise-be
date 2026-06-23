@@ -54,13 +54,13 @@ func Init(defaultPath string) (*gorm.DB, error) {
 
 	db, err := gorm.Open(dialector, &gorm.Config{})
 	if err != nil {
-		slog.Error("Failed to open database", "type", dbType, "error", err)
+		slog.ErrorContext(context.Background(), "Failed to open database", "type", dbType, "error", err)
 		return nil, err
 	}
 
 	sqlDB, err := db.DB()
 	if err != nil {
-		slog.Error("Failed to get raw database instance", "error", err)
+		slog.ErrorContext(context.Background(), "Failed to get raw database instance", "error", err)
 		return nil, err
 	}
 
@@ -68,9 +68,9 @@ func Init(defaultPath string) (*gorm.DB, error) {
 	defer cancel()
 
 	if err = sqlDB.PingContext(ctx); err != nil {
-		slog.Error("Database connection failed", "error", err)
+		slog.ErrorContext(ctx, "Database connection failed", "error", err)
 		if closeErr := sqlDB.Close(); closeErr != nil {
-			slog.Error("Error closing sql db", "error", closeErr)
+			slog.ErrorContext(ctx, "Error closing sql db", "error", closeErr)
 		}
 		return nil, err
 	}
@@ -78,13 +78,13 @@ func Init(defaultPath string) (*gorm.DB, error) {
 	// SQLite specific settings
 	if dbType == "sqlite" {
 		if _, err := sqlDB.ExecContext(ctx, `PRAGMA foreign_keys = ON;`); err != nil {
-			slog.Warn("Failed to set PRAGMA foreign_keys", "error", err)
+			slog.WarnContext(ctx, "Failed to set PRAGMA foreign_keys", "error", err)
 		}
 		if _, err := sqlDB.ExecContext(ctx, `PRAGMA journal_mode = WAL;`); err != nil {
-			slog.Warn("Failed to set PRAGMA journal_mode", "error", err)
+			slog.WarnContext(ctx, "Failed to set PRAGMA journal_mode", "error", err)
 		}
 		if _, err := sqlDB.ExecContext(ctx, `PRAGMA synchronous = NORMAL;`); err != nil {
-			slog.Warn("Failed to set PRAGMA synchronous", "error", err)
+			slog.WarnContext(ctx, "Failed to set PRAGMA synchronous", "error", err)
 		}
 	}
 
@@ -96,23 +96,23 @@ func Init(defaultPath string) (*gorm.DB, error) {
 		&models.SummaryDetailDB{},
 	)
 	if err != nil {
-		slog.Error("Failed to auto-migrate tables", "error", err)
+		slog.ErrorContext(ctx, "Failed to auto-migrate tables", "error", err)
 		if closeErr := sqlDB.Close(); closeErr != nil {
-			slog.Error("Error closing sql db", "error", closeErr)
+			slog.ErrorContext(ctx, "Error closing sql db", "error", closeErr)
 		}
 		return nil, err
 	}
 
 	DB = db
 
-	slog.Info("Database connected and migrated successfully", "type", dbType)
+	slog.InfoContext(ctx, "Database connected and migrated successfully", "type", dbType)
 	return db, nil
 }
 
 // Close closes the database connection
 func Close() error {
 	if DB != nil {
-		slog.Info("Closing database connection")
+		slog.InfoContext(context.Background(), "Closing database connection")
 		sqlDB, err := DB.DB()
 		if err != nil {
 			return err

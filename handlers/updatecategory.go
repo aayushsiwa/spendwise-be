@@ -39,6 +39,6 @@ func (h *Handler) UpdateCategory(c *gin.Context) {
 		return
 	}
 
-	slog.Info("Category updated successfully", "categoryID", id, "name", cat.Name)
+	slog.InfoContext(c.Request.Context(), "Category updated successfully", "categoryID", id, "name", cat.Name)
 	c.JSON(http.StatusOK, gin.H{"ID": id, "name": cat.Name, "icon": cat.Icon, "color": cat.Color})
 }
