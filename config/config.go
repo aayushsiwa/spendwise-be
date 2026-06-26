@@ -12,7 +12,6 @@ type Config struct {
 	GinMode       string
 	DBType        string
 	DBURL         string
-	DatabaseURL   string
 }
 
 func Load() (*Config, error) {
@@ -22,7 +21,6 @@ func Load() (*Config, error) {
 		GinMode:       os.Getenv("GIN_MODE"),
 		DBType:        envOrDefault("DB_TYPE", "sqlite"),
 		DBURL:         os.Getenv("DB_URL"),
-		DatabaseURL:   os.Getenv("DATABASE_URL"),
 	}
 
 	var errs []string
