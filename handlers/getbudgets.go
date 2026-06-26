@@ -13,24 +13,35 @@ import (
 
 func (h *Handler) GetBudgets(c *gin.Context) {
 	now := time.Now()
-	month, err := strconv.Atoi(c.DefaultQuery("month", strconv.Itoa(int(now.Month()))))
+	monthStr := c.DefaultQuery("month", strconv.Itoa(int(now.Month())))
+	yearStr := c.DefaultQuery("year", strconv.Itoa(now.Year()))
+
+	month, err := strconv.Atoi(monthStr)
 	if err != nil {
-		appErrors.HandleError(c, appErrors.NewValidation("Invalid month parameter", map[string]any{
-			"month": map[string]any{
-				"message": "Must be a valid integer",
-				"value":   c.Query("month"),
-			},
-		}))
+		appErrors.HandleValidationErrors(c, appErrors.ValidationErrors{
+			appErrors.NewValidationError("month", "must be a number", monthStr),
+		})
 		return
 	}
-	year, err := strconv.Atoi(c.DefaultQuery("year", strconv.Itoa(now.Year())))
+	year, err := strconv.Atoi(yearStr)
 	if err != nil {
-		appErrors.HandleError(c, appErrors.NewValidation("Invalid year parameter", map[string]any{
-			"year": map[string]any{
-				"message": "Must be a valid integer",
-				"value":   c.Query("year"),
-			},
-		}))
+		appErrors.HandleValidationErrors(c, appErrors.ValidationErrors{
+			appErrors.NewValidationError("year", "must be a number", yearStr),
+		})
+		return
+	}
+
+	if month < 1 || month > 12 {
+		appErrors.HandleValidationErrors(c, appErrors.ValidationErrors{
+			appErrors.NewValidationError("month", "must be between 1 and 12", month),
+		})
+		return
+	}
+
+	if year < 1 {
+		appErrors.HandleValidationErrors(c, appErrors.ValidationErrors{
+			appErrors.NewValidationError("year", "must be a positive number", year),
+		})
 		return
 	}
 
@@ -46,24 +57,35 @@ func (h *Handler) GetBudgets(c *gin.Context) {
 
 func (h *Handler) GetBudgetProgress(c *gin.Context) {
 	now := time.Now()
-	month, err := strconv.Atoi(c.DefaultQuery("month", strconv.Itoa(int(now.Month()))))
+	monthStr := c.DefaultQuery("month", strconv.Itoa(int(now.Month())))
+	yearStr := c.DefaultQuery("year", strconv.Itoa(now.Year()))
+
+	month, err := strconv.Atoi(monthStr)
 	if err != nil {
-		appErrors.HandleError(c, appErrors.NewValidation("Invalid month parameter", map[string]any{
-			"month": map[string]any{
-				"message": "Must be a valid integer",
-				"value":   c.Query("month"),
-			},
-		}))
+		appErrors.HandleValidationErrors(c, appErrors.ValidationErrors{
+			appErrors.NewValidationError("month", "must be a number", monthStr),
+		})
 		return
 	}
-	year, err := strconv.Atoi(c.DefaultQuery("year", strconv.Itoa(now.Year())))
+	year, err := strconv.Atoi(yearStr)
 	if err != nil {
-		appErrors.HandleError(c, appErrors.NewValidation("Invalid year parameter", map[string]any{
-			"year": map[string]any{
-				"message": "Must be a valid integer",
-				"value":   c.Query("year"),
-			},
-		}))
+		appErrors.HandleValidationErrors(c, appErrors.ValidationErrors{
+			appErrors.NewValidationError("year", "must be a number", yearStr),
+		})
+		return
+	}
+
+	if month < 1 || month > 12 {
+		appErrors.HandleValidationErrors(c, appErrors.ValidationErrors{
+			appErrors.NewValidationError("month", "must be between 1 and 12", month),
+		})
+		return
+	}
+
+	if year < 1 {
+		appErrors.HandleValidationErrors(c, appErrors.ValidationErrors{
+			appErrors.NewValidationError("year", "must be a positive number", year),
+		})
 		return
 	}
 
