@@ -62,6 +62,12 @@ func TestGetBudgets(t *testing.T) {
 			wantStatus: http.StatusBadRequest,
 			wantBody:   `validation_error`,
 		},
+		{
+			name:       "NegativeYear",
+			query:      map[string]string{"year": "0"},
+			wantStatus: http.StatusBadRequest,
+			wantBody:   `validation_error`,
+		},
 	}
 
 	for _, tt := range tests {
@@ -194,6 +200,12 @@ func TestGetBudgetProgress(t *testing.T) {
 		{
 			name:       "OutOfRangeMonth",
 			query:      map[string]string{"month": "13"},
+			wantStatus: http.StatusBadRequest,
+			wantBody:   `validation_error`,
+		},
+		{
+			name:       "NegativeYear",
+			query:      map[string]string{"year": "0"},
 			wantStatus: http.StatusBadRequest,
 			wantBody:   `validation_error`,
 		},
