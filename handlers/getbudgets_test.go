@@ -68,6 +68,65 @@ func TestGetBudgets(t *testing.T) {
 	}
 }
 
+// TestGetBudgetsPassesMonthYearParams verifies that query params month and year
+// are parsed and forwarded to the service correctly.
+func TestGetBudgetsPassesMonthYearParams(t *testing.T) {
+	tests := []struct {
+		name       string
+		query      string
+		wantMonth  int
+		wantYear   int
+	}{
+		{
+			name:      "explicit month and year",
+			query:     "/budgets?month=3&year=2025",
+			wantMonth: 3,
+			wantYear:  2025,
+		},
+		{
+			name:      "only year provided uses given year",
+			query:     "/budgets?year=2024",
+			wantYear:  2024,
+		},
+		{
+			name:      "invalid month falls back to zero (strconv.Atoi error ignored)",
+			query:     "/budgets?month=notanumber&year=2025",
+			wantMonth: 0,
+			wantYear:  2025,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var capturedMonth, capturedYear int
+			svc := &mocks.MockService{
+				GetBudgetsFn: func(_ context.Context, month, year int) ([]models.Budget, error) {
+					capturedMonth = month
+					capturedYear = year
+					return nil, nil
+				},
+			}
+
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = httptest.NewRequestWithContext(context.Background(), http.MethodGet, tt.query, nil)
+
+			h := &Handler{Service: svc}
+			h.GetBudgets(c)
+
+			if w.Code != http.StatusOK {
+				t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+			}
+			if tt.wantMonth != 0 && capturedMonth != tt.wantMonth {
+				t.Errorf("month = %d, want %d", capturedMonth, tt.wantMonth)
+			}
+			if tt.wantYear != 0 && capturedYear != tt.wantYear {
+				t.Errorf("year = %d, want %d", capturedYear, tt.wantYear)
+			}
+		})
+	}
+}
+
 func TestGetBudgetProgress(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -117,6 +176,59 @@ func TestGetBudgetProgress(t *testing.T) {
 			}
 			if tt.wantBody != "" && !strings.Contains(w.Body.String(), tt.wantBody) {
 				t.Errorf("expected body containing %q, got %s", tt.wantBody, w.Body.String())
+			}
+		})
+	}
+}
+
+// TestGetBudgetProgressPassesMonthYearParams verifies that query params month and year
+// are parsed and forwarded to the service correctly.
+func TestGetBudgetProgressPassesMonthYearParams(t *testing.T) {
+	tests := []struct {
+		name      string
+		query     string
+		wantMonth int
+		wantYear  int
+	}{
+		{
+			name:      "explicit month and year",
+			query:     "/budgets/progress?month=11&year=2025",
+			wantMonth: 11,
+			wantYear:  2025,
+		},
+		{
+			name:      "only month provided",
+			query:     "/budgets/progress?month=1",
+			wantMonth: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var capturedMonth, capturedYear int
+			svc := &mocks.MockService{
+				GetBudgetProgressFn: func(_ context.Context, month, year int) ([]models.BudgetProgress, error) {
+					capturedMonth = month
+					capturedYear = year
+					return nil, nil
+				},
+			}
+
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = httptest.NewRequestWithContext(context.Background(), http.MethodGet, tt.query, nil)
+
+			h := &Handler{Service: svc}
+			h.GetBudgetProgress(c)
+
+			if w.Code != http.StatusOK {
+				t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+			}
+			if tt.wantMonth != 0 && capturedMonth != tt.wantMonth {
+				t.Errorf("month = %d, want %d", capturedMonth, tt.wantMonth)
+			}
+			if tt.wantYear != 0 && capturedYear != tt.wantYear {
+				t.Errorf("year = %d, want %d", capturedYear, tt.wantYear)
 			}
 		})
 	}
