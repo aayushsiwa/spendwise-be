@@ -3,14 +3,17 @@ package errors
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"reflect"
 	"runtime"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
 )
 
 // Error types for different scenarios
@@ -126,6 +129,77 @@ func NewForbidden(message string, err error) *AppError {
 
 func NewConflict(message string, err error) *AppError {
 	return New("conflict", message, http.StatusConflict, err)
+}
+
+func friendlyTypeName(t reflect.Type) string {
+	switch t.Kind() {
+	case reflect.Slice:
+		elem := t.Elem()
+		if elem.Name() != "" {
+			return fmt.Sprintf("array of %s", elem.Name())
+		}
+		return "array"
+	case reflect.Float64, reflect.Float32:
+		return "number"
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return "number"
+	case reflect.String:
+		return "string"
+	case reflect.Bool:
+		return "boolean"
+	default:
+		if t.Name() != "" {
+			return t.Name()
+		}
+		return t.Kind().String()
+	}
+}
+
+// ParseBindingError attempts to parse a Gin binding error into structured ValidationErrors.
+func ParseBindingError(err error) (ValidationErrors, bool) {
+	if unmarshalTypeErr, ok := errors.AsType[*json.UnmarshalTypeError](err); ok {
+		field := unmarshalTypeErr.Field
+		if field != "" {
+			field = strings.ToLower(field[:1]) + field[1:]
+		}
+		expected := friendlyTypeName(unmarshalTypeErr.Type)
+		message := fmt.Sprintf("Expected %s but got %s", expected, unmarshalTypeErr.Value)
+		return ValidationErrors{
+			NewValidationError(field, message, unmarshalTypeErr.Value),
+		}, true
+	}
+
+	if _, ok := errors.AsType[*json.SyntaxError](err); ok {
+		return ValidationErrors{
+			NewValidationError("body", "Malformed JSON in request body", nil),
+		}, true
+	}
+
+	if valErrs, ok := errors.AsType[validator.ValidationErrors](err); ok {
+		var ve ValidationErrors
+		for _, fieldErr := range valErrs {
+			ve = append(ve, NewValidationError(
+				fieldErr.Field(),
+				fmt.Sprintf("validation failed on '%s' tag", fieldErr.Tag()),
+				fieldErr.Value(),
+			))
+		}
+		return ve, true
+	}
+
+	return nil, false
+}
+
+// HandleBindingError handles Gin binding errors by converting them to structured
+// validation errors or falling back to a generic invalid input error.
+func HandleBindingError(c *gin.Context, err error, message string) {
+	if validationErrs, ok := ParseBindingError(err); ok {
+		HandleValidationErrors(c, validationErrs)
+		return
+	}
+	appErr := NewInvalidInput(message, err)
+	HandleError(c, appErr)
 }
 
 // HandleError handles errors and sends appropriate HTTP responses

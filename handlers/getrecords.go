@@ -19,8 +19,7 @@ func (h *Handler) GetRecords(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindQuery(queryParams); err != nil {
-		appErr := errors.NewInvalidInput("Invalid query parameters", err)
-		errors.HandleError(c, appErr)
+		errors.HandleBindingError(c, err, "Invalid query parameters")
 		return
 	}
 

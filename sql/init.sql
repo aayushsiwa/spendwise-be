@@ -34,3 +34,15 @@ CREATE TABLE IF NOT EXISTS summary_details (
   amount REAL NOT NULL,
   PRIMARY KEY (month, type, "categoryID")
 );
+
+CREATE TABLE IF NOT EXISTS budgets (
+  "ID" TEXT PRIMARY KEY,
+  "categoryID" TEXT NOT NULL,
+  month INTEGER NOT NULL CHECK (month >= 1 AND month <= 12),
+  year INTEGER NOT NULL,
+  amount REAL NOT NULL CHECK (amount > 0),
+  "createdAt" TEXT NOT NULL DEFAULT (date('now')),
+  "updatedAt" TEXT NOT NULL DEFAULT (date('now')),
+  FOREIGN KEY ("categoryID") REFERENCES categories("ID") ON DELETE CASCADE,
+  UNIQUE("categoryID", month, year)
+);

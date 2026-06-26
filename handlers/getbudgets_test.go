@@ -17,6 +17,7 @@ import (
 func TestGetBudgets(t *testing.T) {
 	tests := []struct {
 		name       string
+		query      map[string]string
 		mock       *mocks.MockService
 		wantStatus int
 		wantBody   string
@@ -43,13 +44,46 @@ func TestGetBudgets(t *testing.T) {
 			wantStatus: http.StatusOK,
 			wantBody:   `"budgets"`,
 		},
+		{
+			name:       "InvalidMonth",
+			query:      map[string]string{"month": "abc"},
+			wantStatus: http.StatusBadRequest,
+			wantBody:   `validation_error`,
+		},
+		{
+			name:       "InvalidYear",
+			query:      map[string]string{"year": "foo"},
+			wantStatus: http.StatusBadRequest,
+			wantBody:   `validation_error`,
+		},
+		{
+			name:       "OutOfRangeMonth",
+			query:      map[string]string{"month": "13"},
+			wantStatus: http.StatusBadRequest,
+			wantBody:   `validation_error`,
+		},
+		{
+			name:       "NegativeYear",
+			query:      map[string]string{"year": "0"},
+			wantStatus: http.StatusBadRequest,
+			wantBody:   `validation_error`,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(w)
-			c.Request = httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/budgets", nil)
+
+			path := "/budgets"
+			if len(tt.query) > 0 {
+				var parts []string
+				for k, v := range tt.query {
+					parts = append(parts, k+"="+v)
+				}
+				path = "/budgets?" + strings.Join(parts, "&")
+			}
+			c.Request = httptest.NewRequestWithContext(context.Background(), http.MethodGet, path, nil)
 
 			svc := tt.mock
 			if svc == nil {
@@ -72,10 +106,10 @@ func TestGetBudgets(t *testing.T) {
 // are parsed and forwarded to the service correctly.
 func TestGetBudgetsPassesMonthYearParams(t *testing.T) {
 	tests := []struct {
-		name       string
-		query      string
-		wantMonth  int
-		wantYear   int
+		name      string
+		query     string
+		wantMonth int
+		wantYear  int
 	}{
 		{
 			name:      "explicit month and year",
@@ -84,15 +118,9 @@ func TestGetBudgetsPassesMonthYearParams(t *testing.T) {
 			wantYear:  2025,
 		},
 		{
-			name:      "only year provided uses given year",
-			query:     "/budgets?year=2024",
-			wantYear:  2024,
-		},
-		{
-			name:      "invalid month falls back to zero (strconv.Atoi error ignored)",
-			query:     "/budgets?month=notanumber&year=2025",
-			wantMonth: 0,
-			wantYear:  2025,
+			name:     "only year provided uses given year",
+			query:    "/budgets?year=2024",
+			wantYear: 2024,
 		},
 	}
 
@@ -130,6 +158,7 @@ func TestGetBudgetsPassesMonthYearParams(t *testing.T) {
 func TestGetBudgetProgress(t *testing.T) {
 	tests := []struct {
 		name       string
+		query      map[string]string
 		mock       *mocks.MockService
 		wantStatus int
 		wantBody   string
@@ -156,13 +185,46 @@ func TestGetBudgetProgress(t *testing.T) {
 			wantStatus: http.StatusOK,
 			wantBody:   `"progress"`,
 		},
+		{
+			name:       "InvalidMonth",
+			query:      map[string]string{"month": "abc"},
+			wantStatus: http.StatusBadRequest,
+			wantBody:   `validation_error`,
+		},
+		{
+			name:       "InvalidYear",
+			query:      map[string]string{"year": "foo"},
+			wantStatus: http.StatusBadRequest,
+			wantBody:   `validation_error`,
+		},
+		{
+			name:       "OutOfRangeMonth",
+			query:      map[string]string{"month": "13"},
+			wantStatus: http.StatusBadRequest,
+			wantBody:   `validation_error`,
+		},
+		{
+			name:       "NegativeYear",
+			query:      map[string]string{"year": "0"},
+			wantStatus: http.StatusBadRequest,
+			wantBody:   `validation_error`,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(w)
-			c.Request = httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/budgets/progress", nil)
+
+			path := "/budgets/progress"
+			if len(tt.query) > 0 {
+				var parts []string
+				for k, v := range tt.query {
+					parts = append(parts, k+"="+v)
+				}
+				path = "/budgets/progress?" + strings.Join(parts, "&")
+			}
+			c.Request = httptest.NewRequestWithContext(context.Background(), http.MethodGet, path, nil)
 
 			svc := tt.mock
 			if svc == nil {

@@ -94,19 +94,34 @@ func TestGenerateCustomID(t *testing.T) {
 }
 
 func TestNewHandler(t *testing.T) {
-	mockSvc := &mocks.MockService{}
-	h := NewHandler(mockSvc)
-	if h == nil {
-		t.Fatal("expected NewHandler to return a non-nil Handler")
-	}
-	if h.Service != mockSvc {
-		t.Errorf("expected Handler to have the provided service, got %v", h.Service)
+	tests := []struct {
+		name  string
+		check func(t *testing.T)
+	}{
+		{
+			name: "returns handler with given service and initialized internals",
+			check: func(t *testing.T) {
+				mockSvc := &mocks.MockService{}
+				h := NewHandler(mockSvc)
+				if h == nil {
+					t.Fatal("expected NewHandler to return a non-nil Handler")
+				}
+				if h.Service != mockSvc {
+					t.Errorf("expected Handler to have the provided service, got %v", h.Service)
+				}
+
+				if genIDFunc == nil || openFileFunc == nil {
+					t.Error("expected internal helper functions to be initialized")
+				}
+
+				_, _ = genIDFunc("2024-01-01")
+			},
+		},
 	}
 
-	// Execute the private handlers package functions/variables for complete coverage
-	if genIDFunc == nil || openFileFunc == nil {
-		t.Error("expected internal helper functions to be initialized")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.check(t)
+		})
 	}
-
-	_, _ = genIDFunc("2024-01-01")
 }

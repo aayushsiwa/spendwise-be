@@ -13,8 +13,7 @@ import (
 func (h *Handler) CreateRecord(c *gin.Context) {
 	var rec models.Record
 	if err := c.ShouldBindJSON(&rec); err != nil {
-		appErr := appErrors.NewInvalidInput("Invalid JSON body", err)
-		appErrors.HandleError(c, appErr)
+		appErrors.HandleBindingError(c, err, "Invalid JSON body")
 		return
 	}
 

@@ -40,6 +40,11 @@ func TestNewRoutes(t *testing.T) {
 		{Name: "DeleteCategory", Method: "DELETE", Pattern: "/categories/:id"},
 		{Name: "HealthCheck", Method: "GET", Pattern: "/health"},
 		{Name: "RefreshBalance", Method: "POST", Pattern: "/refresh"},
+		{Name: "GetBudgets", Method: "GET", Pattern: "/budgets"},
+		{Name: "GetBudgetProgress", Method: "GET", Pattern: "/budgets/progress"},
+		{Name: "CreateBudget", Method: "POST", Pattern: "/budgets"},
+		{Name: "UpdateBudget", Method: "PATCH", Pattern: "/budgets/:id"},
+		{Name: "DeleteBudget", Method: "DELETE", Pattern: "/budgets/:id"},
 	}
 
 	for i, exp := range expected {

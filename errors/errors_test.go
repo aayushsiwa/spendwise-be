@@ -8,9 +8,11 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
 )
 
 func init() {
@@ -419,5 +421,184 @@ func TestGetHandlerName_Mocked(t *testing.T) {
 func TestRuntimeFuncForPC_Nil(t *testing.T) {
 	if runtimeFuncForPC(0) != nil {
 		t.Error("expected runtimeFuncForPC(0) to return nil")
+	}
+}
+
+type namedStruct struct{}
+
+func TestFriendlyTypeName(t *testing.T) {
+	tests := []struct {
+		name string
+		typ  reflect.Type
+		want string
+	}{
+		{"float64", reflect.TypeFor[float64](), "number"},
+		{"float32", reflect.TypeFor[float32](), "number"},
+		{"int", reflect.TypeFor[int](), "number"},
+		{"string", reflect.TypeFor[string](), "string"},
+		{"bool", reflect.TypeFor[bool](), "boolean"},
+		{"slice of named type", reflect.TypeFor[[]string](), "array of string"},
+		{"slice of unnamed", reflect.TypeOf([]struct{}{}), "array"},
+		{"named struct default", reflect.TypeFor[namedStruct](), "namedStruct"},
+		{"anonymous struct default", reflect.TypeOf(struct{ x int }{}), "struct"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := friendlyTypeName(tt.typ); got != tt.want {
+				t.Errorf("friendlyTypeName(%v) = %q, want %q", tt.typ, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseBindingError(t *testing.T) {
+	tests := []struct {
+		name   string
+		err    error
+		wantOK bool
+		check  func(t *testing.T, ves ValidationErrors)
+	}{
+		{
+			name: "field type mismatch",
+			err: &json.UnmarshalTypeError{
+				Field: "Amount", Value: "string", Type: reflect.TypeFor[float64](),
+			},
+			wantOK: true,
+			check: func(t *testing.T, ves ValidationErrors) {
+				if len(ves) != 1 {
+					t.Fatalf("got %d errors, want 1", len(ves))
+				}
+				if ves[0].Field != "amount" {
+					t.Errorf("Field = %q, want %q", ves[0].Field, "amount")
+				}
+				if ves[0].Message != "Expected number but got string" {
+					t.Errorf("Message = %q, want %q", ves[0].Message, "Expected number but got string")
+				}
+				if ves[0].Value != "string" {
+					t.Errorf("Value = %v, want %v", ves[0].Value, "string")
+				}
+			},
+		},
+		{
+			name: "object into array",
+			err: &json.UnmarshalTypeError{
+				Field: "", Value: "object", Type: reflect.TypeOf([]struct{}{}),
+			},
+			wantOK: true,
+			check: func(t *testing.T, ves ValidationErrors) {
+				if len(ves) != 1 {
+					t.Fatalf("got %d errors, want 1", len(ves))
+				}
+				if ves[0].Field != "" {
+					t.Errorf("Field = %q, want empty", ves[0].Field)
+				}
+				if ves[0].Message != "Expected array but got object" {
+					t.Errorf("Message = %q, want %q", ves[0].Message, "Expected array but got object")
+				}
+			},
+		},
+		{
+			name:   "malformed JSON",
+			err:    &json.SyntaxError{Offset: 5},
+			wantOK: true,
+			check: func(t *testing.T, ves ValidationErrors) {
+				if len(ves) != 1 {
+					t.Fatalf("got %d errors, want 1", len(ves))
+				}
+				if ves[0].Field != "body" {
+					t.Errorf("Field = %q, want %q", ves[0].Field, "body")
+				}
+				if ves[0].Message != "Malformed JSON in request body" {
+					t.Errorf("Message = %q, want %q", ves[0].Message, "Malformed JSON in request body")
+				}
+			},
+		},
+		{
+			name:   "validator tag errors",
+			err:    validator.New().Var(0, "required"),
+			wantOK: true,
+			check: func(t *testing.T, ves ValidationErrors) {
+				if len(ves) == 0 {
+					t.Fatal("expected at least one validation error")
+				}
+			},
+		},
+		{
+			name:   "unknown error",
+			err:    errors.New("unknown error"),
+			wantOK: false,
+			check: func(t *testing.T, ves ValidationErrors) {
+				if ves != nil {
+					t.Error("expected nil ValidationErrors")
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ves, ok := ParseBindingError(tt.err)
+			if ok != tt.wantOK {
+				t.Fatalf("ok = %v, want %v", ok, tt.wantOK)
+			}
+			if tt.check != nil {
+				tt.check(t, ves)
+			}
+		})
+	}
+}
+
+func TestHandleBindingError(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		message  string
+		wantType string
+		wantMsg  string
+	}{
+		{
+			name: "parseable unmarshal type error",
+			err: &json.UnmarshalTypeError{
+				Field: "Amount", Value: "string", Type: reflect.TypeFor[float64](),
+			},
+			message:  "Invalid request body",
+			wantType: "validation_error",
+		},
+		{
+			name:     "fallback unknown error",
+			err:      errors.New("something went wrong"),
+			message:  "Custom message",
+			wantType: "invalid_input",
+			wantMsg:  "Custom message",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gin.SetMode(gin.TestMode)
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/", nil)
+
+			HandleBindingError(c, tt.err, tt.message)
+
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want %d", w.Code, http.StatusBadRequest)
+			}
+			var body map[string]any
+			if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+				t.Fatal(err)
+			}
+			errorObj, ok := body["error"].(map[string]any)
+			if !ok {
+				t.Fatal("response missing 'error' key")
+			}
+			if errorObj["type"] != tt.wantType {
+				t.Errorf("error.type = %v, want %v", errorObj["type"], tt.wantType)
+			}
+			if tt.wantMsg != "" && errorObj["message"] != tt.wantMsg {
+				t.Errorf("error.message = %v, want %q", errorObj["message"], tt.wantMsg)
+			}
+		})
 	}
 }

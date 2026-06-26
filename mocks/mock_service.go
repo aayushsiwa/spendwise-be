@@ -59,6 +59,21 @@ type MockService struct {
 	GetCategoriesFn     func(ctx context.Context) ([]models.Category, error)
 	UpdateCategoryFn    func(ctx context.Context, id string, cat *models.Category) error
 	DeleteCategoryFn    func(ctx context.Context, id string) error
+
+	CreateBudgetErr      error
+	GetBudgetsErr        error
+	GetBudgetProgressErr error
+	UpdateBudgetErr      error
+	DeleteBudgetErr      error
+
+	GetBudgetsResult        []models.Budget
+	GetBudgetProgressResult []models.BudgetProgress
+
+	CreateBudgetFn      func(ctx context.Context, budget *models.Budget) error
+	GetBudgetsFn        func(ctx context.Context, month, year int) ([]models.Budget, error)
+	GetBudgetProgressFn func(ctx context.Context, month, year int) ([]models.BudgetProgress, error)
+	UpdateBudgetFn      func(ctx context.Context, id string, amount float64) error
+	DeleteBudgetFn      func(ctx context.Context, id string) error
 }
 
 func (m *MockService) CreateRecord(ctx context.Context, rec *models.Record) error {
@@ -207,4 +222,45 @@ func (m *MockService) DeleteCategory(ctx context.Context, id string) error {
 		return m.DeleteCategoryFn(ctx, id)
 	}
 	return m.DeleteCategoryErr
+}
+
+func (m *MockService) CreateBudget(ctx context.Context, budget *models.Budget) error {
+	if m.CreateBudgetFn != nil {
+		return m.CreateBudgetFn(ctx, budget)
+	}
+	return m.CreateBudgetErr
+}
+
+func (m *MockService) GetBudgets(ctx context.Context, month, year int) ([]models.Budget, error) {
+	if m.GetBudgetsFn != nil {
+		return m.GetBudgetsFn(ctx, month, year)
+	}
+	if m.GetBudgetsErr != nil {
+		return nil, m.GetBudgetsErr
+	}
+	return m.GetBudgetsResult, nil
+}
+
+func (m *MockService) GetBudgetProgress(ctx context.Context, month, year int) ([]models.BudgetProgress, error) {
+	if m.GetBudgetProgressFn != nil {
+		return m.GetBudgetProgressFn(ctx, month, year)
+	}
+	if m.GetBudgetProgressErr != nil {
+		return nil, m.GetBudgetProgressErr
+	}
+	return m.GetBudgetProgressResult, nil
+}
+
+func (m *MockService) UpdateBudget(ctx context.Context, id string, amount float64) error {
+	if m.UpdateBudgetFn != nil {
+		return m.UpdateBudgetFn(ctx, id, amount)
+	}
+	return m.UpdateBudgetErr
+}
+
+func (m *MockService) DeleteBudget(ctx context.Context, id string) error {
+	if m.DeleteBudgetFn != nil {
+		return m.DeleteBudgetFn(ctx, id)
+	}
+	return m.DeleteBudgetErr
 }

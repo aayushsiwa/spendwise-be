@@ -8,30 +8,70 @@ import (
 )
 
 func TestNewValidator(t *testing.T) {
-	v := NewValidator()
-	if v == nil {
-		t.Fatal("NewValidator() returned nil")
+	tests := []struct {
+		name  string
+		check func(t *testing.T, v *Validator)
+	}{
+		{
+			name: "returns non-nil with initialized errors",
+			check: func(t *testing.T, v *Validator) {
+				if v == nil {
+					t.Fatal("NewValidator() returned nil")
+				}
+				if v.errors == nil {
+					t.Fatal("errors slice not initialized")
+				}
+			},
+		},
 	}
-	if v.errors == nil {
-		t.Fatal("errors slice not initialized")
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.check(t, NewValidator())
+		})
 	}
 }
 
 func TestHasErrors_GetErrors(t *testing.T) {
-	v := NewValidator()
-	if v.HasErrors() {
-		t.Error("fresh validator should not have errors")
-	}
-	if len(v.GetErrors()) != 0 {
-		t.Error("fresh validator GetErrors should be empty")
+	tests := []struct {
+		name  string
+		setup func(v *Validator)
+		check func(t *testing.T, v *Validator)
+	}{
+		{
+			name:  "fresh validator has no errors",
+			setup: func(v *Validator) {},
+			check: func(t *testing.T, v *Validator) {
+				if v.HasErrors() {
+					t.Error("fresh validator should not have errors")
+				}
+				if len(v.GetErrors()) != 0 {
+					t.Error("fresh validator GetErrors should be empty")
+				}
+			},
+		},
+		{
+			name: "after adding error reports correctly",
+			setup: func(v *Validator) {
+				v.errors = append(v.errors, errors.NewValidationError("x", "err", ""))
+			},
+			check: func(t *testing.T, v *Validator) {
+				if !v.HasErrors() {
+					t.Error("should have errors after adding one")
+				}
+				if len(v.GetErrors()) != 1 {
+					t.Error("GetErrors should return 1 error")
+				}
+			},
+		},
 	}
 
-	v.errors = append(v.errors, errors.NewValidationError("x", "err", ""))
-	if !v.HasErrors() {
-		t.Error("should have errors after adding one")
-	}
-	if len(v.GetErrors()) != 1 {
-		t.Error("GetErrors should return 1 error")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := NewValidator()
+			tt.setup(v)
+			tt.check(t, v)
+		})
 	}
 }
 
@@ -286,6 +326,91 @@ func TestValidateCategory(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			v := NewValidator()
 			errs := v.ValidateCategory(tt.cat)
+			if len(errs) != tt.wantErrs {
+				t.Errorf("got %d errors, want %d: %+v", len(errs), tt.wantErrs, errs)
+			}
+		})
+	}
+}
+
+func TestValidateBudget(t *testing.T) {
+	tests := []struct {
+		name     string
+		budget   *models.Budget
+		wantErrs int
+	}{
+		{
+			name:     "empty budget",
+			budget:   &models.Budget{},
+			wantErrs: 2,
+		},
+		{
+			name:     "missing categoryID",
+			budget:   &models.Budget{Amount: 100},
+			wantErrs: 1,
+		},
+		{
+			name:     "zero amount",
+			budget:   &models.Budget{CategoryID: "cat1", Amount: 0},
+			wantErrs: 1,
+		},
+		{
+			name:     "negative amount",
+			budget:   &models.Budget{CategoryID: "cat1", Amount: -50},
+			wantErrs: 1,
+		},
+		{
+			name:     "valid budget",
+			budget:   &models.Budget{CategoryID: "cat1", Amount: 500},
+			wantErrs: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := NewValidator()
+			errs := v.ValidateBudget(tt.budget)
+			if len(errs) != tt.wantErrs {
+				t.Errorf("got %d errors, want %d: %+v", len(errs), tt.wantErrs, errs)
+			}
+		})
+	}
+}
+
+func TestValidateUpdateBudgetAmount(t *testing.T) {
+	floatPtr := func(f float64) *float64 { return &f }
+
+	tests := []struct {
+		name     string
+		amount   *float64
+		wantErrs int
+	}{
+		{
+			name:     "nil amount",
+			amount:   nil,
+			wantErrs: 1,
+		},
+		{
+			name:     "zero amount",
+			amount:   floatPtr(0),
+			wantErrs: 1,
+		},
+		{
+			name:     "negative amount",
+			amount:   floatPtr(-10),
+			wantErrs: 1,
+		},
+		{
+			name:     "valid amount",
+			amount:   floatPtr(200),
+			wantErrs: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := NewValidator()
+			errs := v.ValidateUpdateBudgetAmount(tt.amount)
 			if len(errs) != tt.wantErrs {
 				t.Errorf("got %d errors, want %d: %+v", len(errs), tt.wantErrs, errs)
 			}

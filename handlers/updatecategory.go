@@ -22,9 +22,8 @@ func (h *Handler) UpdateCategory(c *gin.Context) {
 	}
 
 	var cat models.Category
-	if err := c.BindJSON(&cat); err != nil {
-		appErr := errors.NewInvalidInput("Invalid JSON body", err)
-		errors.HandleError(c, appErr)
+	if err := c.ShouldBindJSON(&cat); err != nil {
+		errors.HandleBindingError(c, err, "Invalid JSON body")
 		return
 	}
 
