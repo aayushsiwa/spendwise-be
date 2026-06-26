@@ -16,8 +16,8 @@ import (
 func TestNewRoutes(t *testing.T) {
 	routes := NewRoutes(nil)
 
-	if len(routes) != 15 {
-		t.Fatalf("expected 15 routes, got %d", len(routes))
+	if len(routes) != 20 {
+		t.Fatalf("expected 20 routes, got %d", len(routes))
 	}
 
 	expected := []struct {
@@ -55,6 +55,45 @@ func TestNewRoutes(t *testing.T) {
 			}
 			if routes[i].HandlerFunc == nil {
 				t.Errorf("route %d HandlerFunc is nil", i)
+			}
+		})
+	}
+}
+
+func TestNewRoutesContainsBudgetRoutes(t *testing.T) {
+	routes := NewRoutes(nil)
+
+	budgetRoutes := []struct {
+		Name    string
+		Method  string
+		Pattern string
+	}{
+		{Name: "GetBudgets", Method: "GET", Pattern: "/budgets"},
+		{Name: "GetBudgetProgress", Method: "GET", Pattern: "/budgets/progress"},
+		{Name: "CreateBudget", Method: "POST", Pattern: "/budgets"},
+		{Name: "UpdateBudget", Method: "PATCH", Pattern: "/budgets/:id"},
+		{Name: "DeleteBudget", Method: "DELETE", Pattern: "/budgets/:id"},
+	}
+
+	routeByName := make(map[string]Route, len(routes))
+	for _, r := range routes {
+		routeByName[r.Name] = r
+	}
+
+	for _, exp := range budgetRoutes {
+		t.Run(exp.Name, func(t *testing.T) {
+			r, ok := routeByName[exp.Name]
+			if !ok {
+				t.Fatalf("route %q not found", exp.Name)
+			}
+			if r.Method != exp.Method {
+				t.Errorf("route %q Method = %q, want %q", exp.Name, r.Method, exp.Method)
+			}
+			if r.Pattern != exp.Pattern {
+				t.Errorf("route %q Pattern = %q, want %q", exp.Name, r.Pattern, exp.Pattern)
+			}
+			if r.HandlerFunc == nil {
+				t.Errorf("route %q HandlerFunc is nil", exp.Name)
 			}
 		})
 	}

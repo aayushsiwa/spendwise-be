@@ -95,3 +95,49 @@ func TestCreateCategories(t *testing.T) {
 		})
 	}
 }
+
+// TestCreateCategoriesMalformedJSONErrorFormat verifies that HandleBindingError
+// returns the structured validation error message format for malformed JSON.
+func TestCreateCategoriesMalformedJSONErrorFormat(t *testing.T) {
+	tests := []struct {
+		name        string
+		body        string
+		wantErrMsg  string
+		wantErrType string
+	}{
+		{
+			name:        "syntax error returns structured validation error",
+			body:        "not-json",
+			wantErrMsg:  "Malformed JSON in request body",
+			wantErrType: "validation_error",
+		},
+		{
+			name:        "type mismatch returns structured validation error",
+			body:        `"not-an-array"`,
+			wantErrType: "validation_error",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/categories", strings.NewReader(tt.body))
+			c.Request.Header.Set("Content-Type", "application/json")
+
+			h := &Handler{Service: &mocks.MockService{}}
+			h.CreateCategories(c)
+
+			if w.Code != http.StatusBadRequest {
+				t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
+			}
+			body := w.Body.String()
+			if tt.wantErrMsg != "" && !strings.Contains(body, tt.wantErrMsg) {
+				t.Errorf("expected body containing %q, got %s", tt.wantErrMsg, body)
+			}
+			if tt.wantErrType != "" && !strings.Contains(body, tt.wantErrType) {
+				t.Errorf("expected error type %q in body, got %s", tt.wantErrType, body)
+			}
+		})
+	}
+}
