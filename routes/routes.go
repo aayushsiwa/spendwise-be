@@ -150,6 +150,43 @@ func NewRoutes(h *handlers.Handler) Routes {
 			Pattern:     "/budgets/:id",
 			HandlerFunc: h.DeleteBudget,
 		},
+		// Goals
+		{
+			Name:        "CreateGoal",
+			Method:      "POST",
+			Pattern:     "/goals",
+			HandlerFunc: h.CreateGoal,
+		},
+		{
+			Name:        "GetGoals",
+			Method:      "GET",
+			Pattern:     "/goals",
+			HandlerFunc: h.GetGoals,
+		},
+		{
+			Name:        "GetGoal",
+			Method:      "GET",
+			Pattern:     "/goals/:id",
+			HandlerFunc: h.GetGoal,
+		},
+		{
+			Name:        "UpdateGoal",
+			Method:      "PATCH",
+			Pattern:     "/goals/:id",
+			HandlerFunc: h.UpdateGoal,
+		},
+		{
+			Name:        "DeleteGoal",
+			Method:      "DELETE",
+			Pattern:     "/goals/:id",
+			HandlerFunc: h.DeleteGoal,
+		},
+		{
+			Name:        "AddGoalProgress",
+			Method:      "POST",
+			Pattern:     "/goals/:id/progress",
+			HandlerFunc: h.AddGoalProgress,
+		},
 	}
 }
 

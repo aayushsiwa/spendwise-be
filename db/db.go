@@ -99,6 +99,7 @@ func Init(defaultPath string) (*gorm.DB, error) {
 		&models.SummaryDB{},
 		&models.SummaryDetailDB{},
 		&models.Budget{},
+		&models.Goal{},
 	)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to auto-migrate tables", "error", err)
