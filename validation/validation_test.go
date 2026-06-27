@@ -442,6 +442,221 @@ func TestEnum(t *testing.T) {
 	}
 }
 
+func TestValidateGoal(t *testing.T) {
+	tests := []struct {
+		name     string
+		goal     *models.Goal
+		wantErrs int
+	}{
+		{
+			name:     "empty goal",
+			goal:     &models.Goal{},
+			wantErrs: 2,
+		},
+		{
+			name:     "missing target amount",
+			goal:     &models.Goal{Name: "Save"},
+			wantErrs: 1,
+		},
+		{
+			name:     "missing name",
+			goal:     &models.Goal{TargetAmount: 1000},
+			wantErrs: 1,
+		},
+		{
+			name:     "zero target amount",
+			goal:     &models.Goal{Name: "Save", TargetAmount: 0},
+			wantErrs: 1,
+		},
+		{
+			name:     "negative target amount",
+			goal:     &models.Goal{Name: "Save", TargetAmount: -100},
+			wantErrs: 1,
+		},
+		{
+			name:     "name too long",
+			goal:     &models.Goal{Name: string(make([]byte, 101)), TargetAmount: 100},
+			wantErrs: 1,
+		},
+		{
+			name:     "invalid target date",
+			goal:     &models.Goal{Name: "Save", TargetAmount: 100, TargetDate: "bad-date"},
+			wantErrs: 1,
+		},
+		{
+			name:     "invalid status",
+			goal:     &models.Goal{Name: "Save", TargetAmount: 100, Status: "invalid"},
+			wantErrs: 1,
+		},
+		{
+			name:     "description too long",
+			goal:     &models.Goal{Name: "Save", TargetAmount: 100, Description: string(make([]byte, 501))},
+			wantErrs: 1,
+		},
+		{
+			name:     "valid goal minimal",
+			goal:     &models.Goal{Name: "Save", TargetAmount: 100},
+			wantErrs: 0,
+		},
+		{
+			name:     "valid goal all fields",
+			goal:     &models.Goal{Name: "Vacation", TargetAmount: 5000, TargetDate: "2025-12-31", Status: "active", Description: "Family trip"},
+			wantErrs: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := NewValidator()
+			errs := v.ValidateGoal(tt.goal)
+			if len(errs) != tt.wantErrs {
+				t.Errorf("got %d errors, want %d: %+v", len(errs), tt.wantErrs, errs)
+			}
+		})
+	}
+}
+
+func TestValidateUpdateGoal(t *testing.T) {
+	tests := []struct {
+		name     string
+		req      *models.UpdateGoalRequest
+		wantErrs int
+	}{
+		{
+			name:     "empty update is valid",
+			req:      &models.UpdateGoalRequest{},
+			wantErrs: 0,
+		},
+		{
+			name:     "empty name",
+			req:      &models.UpdateGoalRequest{Name: new("")},
+			wantErrs: 1,
+		},
+		{
+			name:     "negative target amount",
+			req:      &models.UpdateGoalRequest{TargetAmount: new(float64(-1))},
+			wantErrs: 1,
+		},
+		{
+			name:     "zero target amount",
+			req:      &models.UpdateGoalRequest{TargetAmount: new(float64(0))},
+			wantErrs: 1,
+		},
+		{
+			name:     "valid target amount",
+			req:      &models.UpdateGoalRequest{TargetAmount: new(float64(100))},
+			wantErrs: 0,
+		},
+		{
+			name:     "negative current amount",
+			req:      &models.UpdateGoalRequest{CurrentAmount: new(float64(-1))},
+			wantErrs: 1,
+		},
+		{
+			name:     "positive current amount",
+			req:      &models.UpdateGoalRequest{CurrentAmount: new(float64(50))},
+			wantErrs: 0,
+		},
+		{
+			name:     "invalid status",
+			req:      &models.UpdateGoalRequest{Status: new("invalid")},
+			wantErrs: 1,
+		},
+		{
+			name:     "valid status",
+			req:      &models.UpdateGoalRequest{Status: new("achieved")},
+			wantErrs: 0,
+		},
+		{
+			name:     "invalid target date",
+			req:      &models.UpdateGoalRequest{TargetDate: new("bad-date")},
+			wantErrs: 1,
+		},
+		{
+			name:     "valid target date",
+			req:      &models.UpdateGoalRequest{TargetDate: new("2025-12-31")},
+			wantErrs: 0,
+		},
+		{
+			name:     "description too long",
+			req:      &models.UpdateGoalRequest{Description: new(string(make([]byte, 501)))},
+			wantErrs: 1,
+		},
+		{
+			name:     "name too long",
+			req:      &models.UpdateGoalRequest{Name: new(string(make([]byte, 101)))},
+			wantErrs: 1,
+		},
+		{
+			name:     "valid name update",
+			req:      &models.UpdateGoalRequest{Name: new("New name")},
+			wantErrs: 0,
+		},
+		{
+			name: "valid all fields",
+			req: &models.UpdateGoalRequest{
+				Name:                new("Save"),
+				TargetAmount:        new(float64(5000)),
+				CurrentAmount:       new(float64(100)),
+				TargetDate:          new("2025-12-31"),
+				Status:              new("active"),
+				Description:         new("desc"),
+				MonthlyContribution: new(float64(200)),
+			},
+			wantErrs: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := NewValidator()
+			errs := v.ValidateUpdateGoal(tt.req)
+			if len(errs) != tt.wantErrs {
+				t.Errorf("got %d errors, want %d: %+v", len(errs), tt.wantErrs, errs)
+			}
+		})
+	}
+}
+
+func TestValidateAddProgress(t *testing.T) {
+	tests := []struct {
+		name     string
+		req      *models.AddProgressRequest
+		wantErrs int
+	}{
+		{
+			name:     "nil request",
+			req:      nil,
+			wantErrs: 1,
+		},
+		{
+			name:     "zero amount",
+			req:      &models.AddProgressRequest{Amount: 0},
+			wantErrs: 1,
+		},
+		{
+			name:     "negative amount",
+			req:      &models.AddProgressRequest{Amount: -50},
+			wantErrs: 1,
+		},
+		{
+			name:     "valid amount",
+			req:      &models.AddProgressRequest{Amount: 100},
+			wantErrs: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := NewValidator()
+			errs := v.ValidateAddProgress(tt.req)
+			if len(errs) != tt.wantErrs {
+				t.Errorf("got %d errors, want %d: %+v", len(errs), tt.wantErrs, errs)
+			}
+		})
+	}
+}
+
 func TestMinLength(t *testing.T) {
 	tests := []struct {
 		name    string

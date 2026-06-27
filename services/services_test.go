@@ -26,6 +26,8 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		&models.Record{},
 		&models.SummaryDB{},
 		&models.SummaryDetailDB{},
+		&models.Budget{},
+		&models.Goal{},
 	)
 	if err != nil {
 		t.Fatalf("failed to auto-migrate schema: %v", err)
@@ -774,6 +776,248 @@ func TestImportCSVAndJSON(t *testing.T) {
 		db.Table("records").Count(&count)
 		if count != 2 {
 			t.Errorf("expected 2 records in DB, got %d", count)
+		}
+	})
+}
+
+func TestCreateGoal(t *testing.T) {
+	db := setupTestDB(t)
+	svc := NewRecordService(db)
+
+	if _, err := svc.CreateCategories(context.Background(), []models.Category{{Name: "Vacation"}}); err != nil {
+		t.Fatalf("CreateCategories setup failed: %v", err)
+	}
+
+	t.Run("success without category", func(t *testing.T) {
+		goal := &models.Goal{Name: "Save for car", TargetAmount: 10000}
+		if err := svc.CreateGoal(context.Background(), goal); err != nil {
+			t.Fatalf("CreateGoal failed: %v", err)
+		}
+		if goal.ID == "" {
+			t.Error("expected non-empty ID")
+		}
+		if goal.CurrentAmount != 0 {
+			t.Errorf("expected currentAmount 0, got %f", goal.CurrentAmount)
+		}
+		if goal.Status != models.GoalActive {
+			t.Errorf("expected active status, got %s", goal.Status)
+		}
+	})
+
+	t.Run("success with category", func(t *testing.T) {
+		goal := &models.Goal{Name: "Vacation fund", TargetAmount: 5000, Category: "vacation"}
+		if err := svc.CreateGoal(context.Background(), goal); err != nil {
+			t.Fatalf("CreateGoal failed: %v", err)
+		}
+		if goal.CategoryID == nil || *goal.CategoryID == "" {
+			t.Error("expected categoryID to be set")
+		}
+	})
+
+	t.Run("category not found", func(t *testing.T) {
+		goal := &models.Goal{Name: "Bad goal", TargetAmount: 100, Category: "nonexistent"}
+		err := svc.CreateGoal(context.Background(), goal)
+		if err == nil {
+			t.Fatal("expected error for nonexistent category")
+		}
+		if !isAppErrorType(err, "invalid_input") {
+			t.Errorf("expected invalid_input error, got %v", err)
+		}
+	})
+}
+
+func TestGetGoals(t *testing.T) {
+	db := setupTestDB(t)
+	svc := NewRecordService(db)
+
+	if _, err := svc.CreateCategories(context.Background(), []models.Category{{Name: "Travel"}}); err != nil {
+		t.Fatalf("CreateCategories setup failed: %v", err)
+	}
+
+	if err := svc.CreateGoal(context.Background(), &models.Goal{Name: "Europe trip", TargetAmount: 3000, Category: "travel"}); err != nil {
+		t.Fatalf("CreateGoal setup failed: %v", err)
+	}
+	if err := svc.CreateGoal(context.Background(), &models.Goal{Name: "Emergency fund", TargetAmount: 5000}); err != nil {
+		t.Fatalf("CreateGoal setup failed: %v", err)
+	}
+
+	goals, err := svc.GetGoals(context.Background())
+	if err != nil {
+		t.Fatalf("GetGoals failed: %v", err)
+	}
+
+	if len(goals) != 2 {
+		t.Fatalf("expected 2 goals, got %d", len(goals))
+	}
+
+	for _, g := range goals {
+		if g.ID == "" {
+			t.Error("expected non-empty ID on goal")
+		}
+		if g.Name == "Europe trip" && g.Category != "travel" {
+			t.Errorf("expected category 'travel', got %q", g.Category)
+		}
+	}
+}
+
+func TestGetGoal(t *testing.T) {
+	db := setupTestDB(t)
+	svc := NewRecordService(db)
+
+	goal := &models.Goal{Name: "Save", TargetAmount: 1000}
+	if err := svc.CreateGoal(context.Background(), goal); err != nil {
+		t.Fatalf("CreateGoal setup failed: %v", err)
+	}
+
+	t.Run("found", func(t *testing.T) {
+		got, err := svc.GetGoal(context.Background(), goal.ID)
+		if err != nil {
+			t.Fatalf("GetGoal failed: %v", err)
+		}
+		if got.Name != "Save" {
+			t.Errorf("expected name 'Save', got %q", got.Name)
+		}
+		if got.ID != goal.ID {
+			t.Errorf("expected ID %q, got %q", goal.ID, got.ID)
+		}
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		_, err := svc.GetGoal(context.Background(), "nonexistent")
+		if err == nil {
+			t.Fatal("expected error for nonexistent goal")
+		}
+		if !isAppErrorType(err, "not_found") {
+			t.Errorf("expected not_found error, got %v", err)
+		}
+	})
+}
+
+func TestUpdateGoal(t *testing.T) {
+	db := setupTestDB(t)
+	svc := NewRecordService(db)
+
+	if _, err := svc.CreateCategories(context.Background(), []models.Category{{Name: "Tech"}}); err != nil {
+		t.Fatalf("CreateCategories setup failed: %v", err)
+	}
+
+	goal := &models.Goal{Name: "Laptop", TargetAmount: 2000}
+	if err := svc.CreateGoal(context.Background(), goal); err != nil {
+		t.Fatalf("CreateGoal setup failed: %v", err)
+	}
+
+	t.Run("update name", func(t *testing.T) {
+		err := svc.UpdateGoal(context.Background(), goal.ID, &models.UpdateGoalRequest{Name: new("New Laptop")})
+		if err != nil {
+			t.Fatalf("UpdateGoal failed: %v", err)
+		}
+		got, _ := svc.GetGoal(context.Background(), goal.ID)
+		if got.Name != "New Laptop" {
+			t.Errorf("expected name 'New Laptop', got %q", got.Name)
+		}
+	})
+
+	t.Run("update target amount", func(t *testing.T) {
+		target := 3000.0
+		err := svc.UpdateGoal(context.Background(), goal.ID, &models.UpdateGoalRequest{TargetAmount: &target})
+		if err != nil {
+			t.Fatalf("UpdateGoal failed: %v", err)
+		}
+		got, _ := svc.GetGoal(context.Background(), goal.ID)
+		if got.TargetAmount != 3000 {
+			t.Errorf("expected targetAmount 3000, got %f", got.TargetAmount)
+		}
+	})
+
+	t.Run("update category", func(t *testing.T) {
+		cat := "tech"
+		err := svc.UpdateGoal(context.Background(), goal.ID, &models.UpdateGoalRequest{Category: &cat})
+		if err != nil {
+			t.Fatalf("UpdateGoal failed: %v", err)
+		}
+		got, _ := svc.GetGoal(context.Background(), goal.ID)
+		if got.Category != "tech" {
+			t.Errorf("expected category 'tech', got %q", got.Category)
+		}
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		err := svc.UpdateGoal(context.Background(), "nonexistent", &models.UpdateGoalRequest{Name: new("X")})
+		if err == nil {
+			t.Fatal("expected error for nonexistent goal")
+		}
+		if !isAppErrorType(err, "not_found") {
+			t.Errorf("expected not_found error, got %v", err)
+		}
+	})
+}
+
+func TestDeleteGoal(t *testing.T) {
+	db := setupTestDB(t)
+	svc := NewRecordService(db)
+
+	goal := &models.Goal{Name: "To delete", TargetAmount: 100}
+	if err := svc.CreateGoal(context.Background(), goal); err != nil {
+		t.Fatalf("CreateGoal setup failed: %v", err)
+	}
+
+	t.Run("success", func(t *testing.T) {
+		if err := svc.DeleteGoal(context.Background(), goal.ID); err != nil {
+			t.Fatalf("DeleteGoal failed: %v", err)
+		}
+		_, err := svc.GetGoal(context.Background(), goal.ID)
+		if err == nil {
+			t.Error("expected error after deletion")
+		}
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		err := svc.DeleteGoal(context.Background(), "nonexistent")
+		if err == nil {
+			t.Fatal("expected error for nonexistent goal")
+		}
+		if !isAppErrorType(err, "not_found") {
+			t.Errorf("expected not_found error, got %v", err)
+		}
+	})
+}
+
+func TestAddGoalProgress(t *testing.T) {
+	db := setupTestDB(t)
+	svc := NewRecordService(db)
+
+	goal := &models.Goal{Name: "Save", TargetAmount: 1000}
+	if err := svc.CreateGoal(context.Background(), goal); err != nil {
+		t.Fatalf("CreateGoal setup failed: %v", err)
+	}
+
+	t.Run("add progress", func(t *testing.T) {
+		if err := svc.AddGoalProgress(context.Background(), goal.ID, 250); err != nil {
+			t.Fatalf("AddGoalProgress failed: %v", err)
+		}
+		got, _ := svc.GetGoal(context.Background(), goal.ID)
+		if got.CurrentAmount != 250 {
+			t.Errorf("expected currentAmount 250, got %f", got.CurrentAmount)
+		}
+	})
+
+	t.Run("add more progress", func(t *testing.T) {
+		if err := svc.AddGoalProgress(context.Background(), goal.ID, 100); err != nil {
+			t.Fatalf("AddGoalProgress failed: %v", err)
+		}
+		got, _ := svc.GetGoal(context.Background(), goal.ID)
+		if got.CurrentAmount != 350 {
+			t.Errorf("expected currentAmount 350, got %f", got.CurrentAmount)
+		}
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		err := svc.AddGoalProgress(context.Background(), "nonexistent", 50)
+		if err == nil {
+			t.Fatal("expected error for nonexistent goal")
+		}
+		if !isAppErrorType(err, "not_found") {
+			t.Errorf("expected not_found error, got %v", err)
 		}
 	})
 }
