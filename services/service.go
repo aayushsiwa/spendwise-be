@@ -37,6 +37,13 @@ type Service interface {
 	GetBudgetProgress(ctx context.Context, month, year int) ([]models.BudgetProgress, error)
 	UpdateBudget(ctx context.Context, id string, amount float64) error
 	DeleteBudget(ctx context.Context, id string) error
+
+	CreateGoal(ctx context.Context, goal *models.Goal) error
+	GetGoals(ctx context.Context) ([]models.Goal, error)
+	GetGoal(ctx context.Context, id string) (*models.Goal, error)
+	UpdateGoal(ctx context.Context, id string, req *models.UpdateGoalRequest) error
+	DeleteGoal(ctx context.Context, id string) error
+	AddGoalProgress(ctx context.Context, id string, amount float64) error
 }
 
 type RecordService struct {
