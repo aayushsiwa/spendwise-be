@@ -16,8 +16,8 @@ import (
 func TestNewRoutes(t *testing.T) {
 	routes := NewRoutes(nil)
 
-	if len(routes) != 20 {
-		t.Fatalf("expected 20 routes, got %d", len(routes))
+	if len(routes) != 26 {
+		t.Fatalf("expected 26 routes, got %d", len(routes))
 	}
 
 	expected := []struct {
@@ -45,6 +45,12 @@ func TestNewRoutes(t *testing.T) {
 		{Name: "CreateBudget", Method: "POST", Pattern: "/budgets"},
 		{Name: "UpdateBudget", Method: "PATCH", Pattern: "/budgets/:id"},
 		{Name: "DeleteBudget", Method: "DELETE", Pattern: "/budgets/:id"},
+		{Name: "CreateGoal", Method: "POST", Pattern: "/goals"},
+		{Name: "GetGoals", Method: "GET", Pattern: "/goals"},
+		{Name: "GetGoal", Method: "GET", Pattern: "/goals/:id"},
+		{Name: "UpdateGoal", Method: "PATCH", Pattern: "/goals/:id"},
+		{Name: "DeleteGoal", Method: "DELETE", Pattern: "/goals/:id"},
+		{Name: "AddGoalProgress", Method: "POST", Pattern: "/goals/:id/progress"},
 	}
 
 	for i, exp := range expected {
