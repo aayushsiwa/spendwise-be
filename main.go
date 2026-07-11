@@ -50,12 +50,14 @@ func main() {
 
 	slog.InfoContext(ctx, "Starting Expense Tracker Server...")
 
-	if cfg.GinMode == "" {
+	if cfg.GinMode != "" {
+		gin.SetMode(cfg.GinMode)
+	} else {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
 	// Initialize database with error handling
-	database, err := db.Init("records.db")
+	database, err := db.Init(cfg.DBType, cfg.DBURL, "records.db")
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to initialize database", "error", err)
 		os.Exit(1)

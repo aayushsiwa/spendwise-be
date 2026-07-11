@@ -907,7 +907,8 @@ func TestUpdateGoal(t *testing.T) {
 	}
 
 	t.Run("update name", func(t *testing.T) {
-		err := svc.UpdateGoal(context.Background(), goal.ID, &models.UpdateGoalRequest{Name: new("New Laptop")})
+		newName := "New Laptop"
+		err := svc.UpdateGoal(context.Background(), goal.ID, &models.UpdateGoalRequest{Name: &newName})
 		if err != nil {
 			t.Fatalf("UpdateGoal failed: %v", err)
 		}
@@ -942,7 +943,8 @@ func TestUpdateGoal(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		err := svc.UpdateGoal(context.Background(), "nonexistent", &models.UpdateGoalRequest{Name: new("X")})
+		newName := "X"
+		err := svc.UpdateGoal(context.Background(), "nonexistent", &models.UpdateGoalRequest{Name: &newName})
 		if err == nil {
 			t.Fatal("expected error for nonexistent goal")
 		}

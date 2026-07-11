@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"log/slog"
-	"os"
 	"time"
 
 	"aayushsiwa/expense-tracker/models"
@@ -19,19 +18,11 @@ import (
 var DB *gorm.DB
 
 // Init initializes the database connection and runs schema migrations.
-// It reads DB_TYPE (defaulting to "sqlite") and DB_URL or DATABASE_URL environment
-// variables to determine database type and connection URL. For SQLite, defaultPath
-// is used when no URL environment variable is set. It returns the initialized GORM
-// database instance.
-func Init(defaultPath string) (*gorm.DB, error) {
-	dbType := os.Getenv("DB_TYPE")
+// It takes dbType and dbURL from the config (or uses defaultPath for SQLite when dbURL is empty).
+// It returns the initialized GORM database instance.
+func Init(dbType, dbURL, defaultPath string) (*gorm.DB, error) {
 	if dbType == "" {
 		dbType = "sqlite"
-	}
-
-	dbURL := os.Getenv("DB_URL")
-	if dbURL == "" {
-		dbURL = os.Getenv("DATABASE_URL")
 	}
 
 	var dialector gorm.Dialector

@@ -124,6 +124,10 @@ func (v *Validator) ValidateGoal(goal *models.Goal) errors.ValidationErrors {
 	}
 	v.positiveNumber("targetAmount", goal.TargetAmount, "Target amount must be greater than 0")
 
+	if goal.MonthlyContribution < 0 {
+		v.errors = append(v.errors, errors.NewValidationError("monthlyContribution", "Monthly contribution must be non-negative", goal.MonthlyContribution))
+	}
+
 	if goal.TargetDate != "" {
 		v.dateFormat("targetDate", goal.TargetDate, "Target date must be in YYYY-MM-DD format")
 	}
@@ -142,6 +146,14 @@ func (v *Validator) ValidateGoal(goal *models.Goal) errors.ValidationErrors {
 // ValidateUpdateGoal validates only the fields present in a goal update request
 func (v *Validator) ValidateUpdateGoal(req *models.UpdateGoalRequest) errors.ValidationErrors {
 	v.errors = make(errors.ValidationErrors, 0)
+
+	// Check if the update request is completely empty
+	if req.Name == nil && req.TargetAmount == nil && req.CurrentAmount == nil &&
+		req.TargetDate == nil && req.Status == nil && req.Description == nil &&
+		req.MonthlyContribution == nil && req.Category == nil {
+		v.errors = append(v.errors, errors.NewValidationError("request", "At least one field must be provided for update", nil))
+		return v.errors
+	}
 
 	if req.Name != nil {
 		v.required("name", *req.Name, "Goal name cannot be empty")
@@ -163,6 +175,11 @@ func (v *Validator) ValidateUpdateGoal(req *models.UpdateGoalRequest) errors.Val
 	}
 	if req.Description != nil {
 		v.maxLength("description", *req.Description, 500, "Description must be 500 characters or less")
+	}
+	if req.MonthlyContribution != nil {
+		if *req.MonthlyContribution < 0 {
+			v.errors = append(v.errors, errors.NewValidationError("monthlyContribution", "Monthly contribution must be non-negative", *req.MonthlyContribution))
+		}
 	}
 
 	return v.errors

@@ -7,6 +7,15 @@ import (
 	"aayushsiwa/expense-tracker/models"
 )
 
+// Helper functions for creating pointers to literals
+func strPtr(s string) *string {
+	return &s
+}
+
+func float64Ptr(f float64) *float64 {
+	return &f
+}
+
 func TestNewValidator(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -523,85 +532,91 @@ func TestValidateUpdateGoal(t *testing.T) {
 		wantErrs int
 	}{
 		{
-			name:     "empty update is valid",
+			name:     "empty update triggers validation error",
 			req:      &models.UpdateGoalRequest{},
-			wantErrs: 0,
+			wantErrs: 1,
 		},
 		{
 			name:     "empty name",
-			req:      &models.UpdateGoalRequest{Name: new("")},
+			req:      &models.UpdateGoalRequest{Name: strPtr("")},
 			wantErrs: 1,
 		},
 		{
 			name:     "negative target amount",
-			req:      &models.UpdateGoalRequest{TargetAmount: new(float64(-1))},
+			req:      &models.UpdateGoalRequest{TargetAmount: float64Ptr(-1)},
 			wantErrs: 1,
 		},
 		{
 			name:     "zero target amount",
-			req:      &models.UpdateGoalRequest{TargetAmount: new(float64(0))},
+			req:      &models.UpdateGoalRequest{TargetAmount: float64Ptr(0)},
 			wantErrs: 1,
 		},
 		{
 			name:     "valid target amount",
-			req:      &models.UpdateGoalRequest{TargetAmount: new(float64(100))},
+			req:      &models.UpdateGoalRequest{TargetAmount: float64Ptr(100)},
 			wantErrs: 0,
 		},
 		{
 			name:     "negative current amount",
-			req:      &models.UpdateGoalRequest{CurrentAmount: new(float64(-1))},
+			req:      &models.UpdateGoalRequest{CurrentAmount: float64Ptr(-1)},
 			wantErrs: 1,
 		},
 		{
 			name:     "positive current amount",
-			req:      &models.UpdateGoalRequest{CurrentAmount: new(float64(50))},
+			req:      &models.UpdateGoalRequest{CurrentAmount: float64Ptr(50)},
 			wantErrs: 0,
 		},
 		{
 			name:     "invalid status",
-			req:      &models.UpdateGoalRequest{Status: new("invalid")},
+			req:      &models.UpdateGoalRequest{Status: strPtr("invalid")},
 			wantErrs: 1,
 		},
 		{
 			name:     "valid status",
-			req:      &models.UpdateGoalRequest{Status: new("achieved")},
+			req:      &models.UpdateGoalRequest{Status: strPtr("achieved")},
 			wantErrs: 0,
 		},
 		{
 			name:     "invalid target date",
-			req:      &models.UpdateGoalRequest{TargetDate: new("bad-date")},
+			req:      &models.UpdateGoalRequest{TargetDate: strPtr("bad-date")},
 			wantErrs: 1,
 		},
 		{
 			name:     "valid target date",
-			req:      &models.UpdateGoalRequest{TargetDate: new("2025-12-31")},
+			req:      &models.UpdateGoalRequest{TargetDate: strPtr("2025-12-31")},
 			wantErrs: 0,
 		},
 		{
-			name:     "description too long",
-			req:      &models.UpdateGoalRequest{Description: new(string(make([]byte, 501)))},
+			name: "description too long",
+			req: &models.UpdateGoalRequest{Description: func() *string {
+				s := string(make([]byte, 501))
+				return &s
+			}()},
 			wantErrs: 1,
 		},
 		{
-			name:     "name too long",
-			req:      &models.UpdateGoalRequest{Name: new(string(make([]byte, 101)))},
+			name: "name too long",
+			req: &models.UpdateGoalRequest{Name: func() *string {
+				s := string(make([]byte, 101))
+				return &s
+			}()},
 			wantErrs: 1,
 		},
 		{
 			name:     "valid name update",
-			req:      &models.UpdateGoalRequest{Name: new("New name")},
+			req:      &models.UpdateGoalRequest{Name: strPtr("New name")},
 			wantErrs: 0,
 		},
 		{
 			name: "valid all fields",
 			req: &models.UpdateGoalRequest{
-				Name:                new("Save"),
-				TargetAmount:        new(float64(5000)),
-				CurrentAmount:       new(float64(100)),
-				TargetDate:          new("2025-12-31"),
-				Status:              new("active"),
-				Description:         new("desc"),
-				MonthlyContribution: new(float64(200)),
+				Name:                strPtr("Save"),
+				TargetAmount:        float64Ptr(5000),
+				CurrentAmount:       float64Ptr(100),
+				TargetDate:          strPtr("2025-12-31"),
+				Status:              strPtr("active"),
+				Description:         strPtr("desc"),
+				MonthlyContribution: float64Ptr(200),
 			},
 			wantErrs: 0,
 		},

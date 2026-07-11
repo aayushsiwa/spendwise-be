@@ -26,6 +26,8 @@ func Load() (*Config, error) {
 	var errs []string
 	if cfg.EncryptionKey == "" {
 		errs = append(errs, "ENCRYPTION_KEY is required")
+	} else if len(cfg.EncryptionKey) != 32 {
+		errs = append(errs, "ENCRYPTION_KEY must be exactly 32 bytes, invalid length")
 	}
 
 	if len(errs) > 0 {

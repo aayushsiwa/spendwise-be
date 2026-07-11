@@ -14,7 +14,7 @@ type Goal struct {
 	TargetAmount        float64    `gorm:"column:targetAmount;not null" json:"targetAmount"`
 	CurrentAmount       float64    `gorm:"column:currentAmount;not null;default:0" json:"currentAmount"`
 	TargetDate          string     `gorm:"column:targetDate" json:"targetDate,omitempty"`
-	Category            string     `gorm:"->;column:category" json:"category,omitempty"`
+	Category            string     `gorm:"->;-:migration;column:category" json:"category,omitempty"`
 	CategoryID          *string    `gorm:"column:categoryID" json:"categoryID,omitempty"`
 	Status              GoalStatus `gorm:"column:status;not null;default:active" json:"status"`
 	Description         string     `gorm:"column:description" json:"description,omitempty"`

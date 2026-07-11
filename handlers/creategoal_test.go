@@ -88,11 +88,11 @@ func TestCreateGoal_ServerError(t *testing.T) {
 	c.Request = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/goals", strings.NewReader(body))
 	c.Request.Header.Set("Content-Type", "application/json")
 
-	mock := &mocks.MockService{}
+	mock := &mocks.MockService{CreateGoalErr: apperrors.NewDatabase("db error", nil)}
 	h := &Handler{Service: mock}
 	h.CreateGoal(c)
 
-	if w.Code != http.StatusCreated {
-		t.Errorf("status = %d, want %d", w.Code, http.StatusCreated)
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusInternalServerError)
 	}
 }

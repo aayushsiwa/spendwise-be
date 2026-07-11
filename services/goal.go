@@ -95,6 +95,19 @@ func (s *RecordService) UpdateGoal(ctx context.Context, id string, req *models.U
 		}
 	}
 
+	// Handle empty updates - should not happen due to validation, but handle gracefully
+	if len(updates) == 0 {
+		// Verify the goal exists
+		var count int64
+		if err := s.db.WithContext(ctx).Model(&models.Goal{}).Where("id = ?", id).Count(&count).Error; err != nil {
+			return apperrors.NewDatabase("Failed to verify goal", err)
+		}
+		if count == 0 {
+			return apperrors.NewNotFound("Goal not found", nil)
+		}
+		return nil
+	}
+
 	result := s.db.WithContext(ctx).Model(&models.Goal{}).Where("id = ?", id).Updates(updates)
 	if result.Error != nil {
 		return apperrors.NewDatabase("Failed to update goal", result.Error)
