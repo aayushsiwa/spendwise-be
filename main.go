@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"aayushsiwa/expense-tracker/config"
 	"aayushsiwa/expense-tracker/db"
 	"aayushsiwa/expense-tracker/handlers"
 	"aayushsiwa/expense-tracker/middleware"
@@ -19,32 +20,16 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// init sets up structured logging, loads environment variables from a .env file, and initializes encryption with the ENCRYPTION_KEY environment variable. The process terminates if the encryption key is missing or fails to initialize.
+// init sets up structured logging and loads environment variables from a .env file.
 func init() {
-	// Initialize structured logging
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 	}))
 	slog.SetDefault(logger)
 
-	// Load environment variables
 	if err := godotenv.Load(); err != nil {
 		slog.WarnContext(context.Background(), "No .env file found, using system environment variables", "error", err)
 	}
-
-	// Set encryption key with validation
-	key := os.Getenv("ENCRYPTION_KEY")
-	if key == "" {
-		slog.ErrorContext(context.Background(), "ENCRYPTION_KEY environment variable is required")
-		os.Exit(1)
-	}
-
-	if err := secure.SetKey([]byte(key)); err != nil {
-		slog.ErrorContext(context.Background(), "Failed to set encryption key", "error", err)
-		os.Exit(1)
-	}
-
-	slog.InfoContext(context.Background(), "Application initialized successfully")
 }
 
 // main initializes and starts the Expense Tracker Server with graceful shutdown support.
@@ -52,18 +37,30 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	slog.InfoContext(ctx, "Starting Expense Tracker Server...")
-
-	// Initialize database with error handling
-	database, err := db.Init("records.db")
+	cfg, err := config.Load()
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to initialize database", "error", err)
+		slog.ErrorContext(context.Background(), "Configuration error", "error", err)
 		os.Exit(1)
 	}
 
-	// Set Gin mode based on environment
-	if os.Getenv("GIN_MODE") == "" {
+	if err := secure.SetKey([]byte(cfg.EncryptionKey)); err != nil {
+		slog.ErrorContext(context.Background(), "Failed to set encryption key", "error", err)
+		os.Exit(1)
+	}
+
+	slog.InfoContext(ctx, "Starting Expense Tracker Server...")
+
+	if cfg.GinMode != "" {
+		gin.SetMode(cfg.GinMode)
+	} else {
 		gin.SetMode(gin.ReleaseMode)
+	}
+
+	// Initialize database with error handling
+	database, err := db.Init(cfg.DBType, cfg.DBURL, "records.db")
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to initialize database", "error", err)
+		os.Exit(1)
 	}
 
 	server := gin.New()
@@ -120,15 +117,10 @@ func main() {
 		cancel()
 	}()
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8090" // fallback default
-	}
-
 	// Start server in a goroutine
 	go func() {
-		slog.InfoContext(ctx, "Server running at http://localhost:"+port)
-		if err := server.Run(":" + port); err != nil {
+		slog.InfoContext(ctx, "Server running at http://localhost:"+cfg.Port)
+		if err := server.Run(":" + cfg.Port); err != nil {
 			slog.ErrorContext(ctx, "Server failed to start", "error", err)
 			cancel()
 		}

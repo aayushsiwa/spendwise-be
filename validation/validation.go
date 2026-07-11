@@ -114,6 +114,90 @@ func (v *Validator) ValidateBudget(budget *models.Budget) errors.ValidationError
 	return v.errors
 }
 
+// ValidateGoal validates a goal model
+func (v *Validator) ValidateGoal(goal *models.Goal) errors.ValidationErrors {
+	v.errors = make(errors.ValidationErrors, 0)
+
+	v.required("name", goal.Name, "Goal name is required")
+	if goal.Name != "" {
+		v.maxLength("name", goal.Name, 100, "Goal name must be 100 characters or less")
+	}
+	v.positiveNumber("targetAmount", goal.TargetAmount, "Target amount must be greater than 0")
+
+	if goal.MonthlyContribution < 0 {
+		v.errors = append(v.errors, errors.NewValidationError("monthlyContribution", "Monthly contribution must be non-negative", goal.MonthlyContribution))
+	}
+
+	if goal.TargetDate != "" {
+		v.dateFormat("targetDate", goal.TargetDate, "Target date must be in YYYY-MM-DD format")
+	}
+
+	if goal.Status != "" {
+		v.enum("status", string(goal.Status), []string{"active", "achieved", "abandoned"}, "Status must be active, achieved, or abandoned")
+	}
+
+	if goal.Description != "" {
+		v.maxLength("description", goal.Description, 500, "Description must be 500 characters or less")
+	}
+
+	return v.errors
+}
+
+// ValidateUpdateGoal validates only the fields present in a goal update request
+func (v *Validator) ValidateUpdateGoal(req *models.UpdateGoalRequest) errors.ValidationErrors {
+	v.errors = make(errors.ValidationErrors, 0)
+
+	// Check if the update request is completely empty
+	if req.Name == nil && req.TargetAmount == nil && req.CurrentAmount == nil &&
+		req.TargetDate == nil && req.Status == nil && req.Description == nil &&
+		req.MonthlyContribution == nil && req.Category == nil {
+		v.errors = append(v.errors, errors.NewValidationError("request", "At least one field must be provided for update", nil))
+		return v.errors
+	}
+
+	if req.Name != nil {
+		v.required("name", *req.Name, "Goal name cannot be empty")
+		v.maxLength("name", *req.Name, 100, "Goal name must be 100 characters or less")
+	}
+	if req.TargetAmount != nil {
+		v.positiveNumber("targetAmount", *req.TargetAmount, "Target amount must be greater than 0")
+	}
+	if req.CurrentAmount != nil {
+		if *req.CurrentAmount < 0 {
+			v.errors = append(v.errors, errors.NewValidationError("currentAmount", "Current amount must be non-negative", *req.CurrentAmount))
+		}
+	}
+	if req.TargetDate != nil && *req.TargetDate != "" {
+		v.dateFormat("targetDate", *req.TargetDate, "Target date must be in YYYY-MM-DD format")
+	}
+	if req.Status != nil {
+		v.enum("status", *req.Status, []string{"active", "achieved", "abandoned"}, "Status must be active, achieved, or abandoned")
+	}
+	if req.Description != nil {
+		v.maxLength("description", *req.Description, 500, "Description must be 500 characters or less")
+	}
+	if req.MonthlyContribution != nil {
+		if *req.MonthlyContribution < 0 {
+			v.errors = append(v.errors, errors.NewValidationError("monthlyContribution", "Monthly contribution must be non-negative", *req.MonthlyContribution))
+		}
+	}
+
+	return v.errors
+}
+
+// ValidateAddProgress validates a progress addition request
+func (v *Validator) ValidateAddProgress(req *models.AddProgressRequest) errors.ValidationErrors {
+	v.errors = make(errors.ValidationErrors, 0)
+
+	if req == nil {
+		v.errors = append(v.errors, errors.NewValidationError("amount", "Request body is required", nil))
+		return v.errors
+	}
+	v.positiveNumber("amount", req.Amount, "Progress amount must be greater than 0")
+
+	return v.errors
+}
+
 // ValidateUpdateBudgetAmount validates the amount field in a budget update request
 func (v *Validator) ValidateUpdateBudgetAmount(amount *float64) errors.ValidationErrors {
 	v.errors = make(errors.ValidationErrors, 0)

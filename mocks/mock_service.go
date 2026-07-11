@@ -74,6 +74,23 @@ type MockService struct {
 	GetBudgetProgressFn func(ctx context.Context, month, year int) ([]models.BudgetProgress, error)
 	UpdateBudgetFn      func(ctx context.Context, id string, amount float64) error
 	DeleteBudgetFn      func(ctx context.Context, id string) error
+
+	CreateGoalErr      error
+	GetGoalsErr        error
+	GetGoalErr         error
+	UpdateGoalErr      error
+	DeleteGoalErr      error
+	AddGoalProgressErr error
+
+	GetGoalsResult []models.Goal
+	GetGoalResult  *models.Goal
+
+	CreateGoalFn      func(ctx context.Context, goal *models.Goal) error
+	GetGoalsFn        func(ctx context.Context) ([]models.Goal, error)
+	GetGoalFn         func(ctx context.Context, id string) (*models.Goal, error)
+	UpdateGoalFn      func(ctx context.Context, id string, req *models.UpdateGoalRequest) error
+	DeleteGoalFn      func(ctx context.Context, id string) error
+	AddGoalProgressFn func(ctx context.Context, id string, amount float64) error
 }
 
 func (m *MockService) CreateRecord(ctx context.Context, rec *models.Record) error {
@@ -263,4 +280,55 @@ func (m *MockService) DeleteBudget(ctx context.Context, id string) error {
 		return m.DeleteBudgetFn(ctx, id)
 	}
 	return m.DeleteBudgetErr
+}
+
+func (m *MockService) CreateGoal(ctx context.Context, goal *models.Goal) error {
+	if m.CreateGoalFn != nil {
+		return m.CreateGoalFn(ctx, goal)
+	}
+	return m.CreateGoalErr
+}
+
+func (m *MockService) GetGoals(ctx context.Context) ([]models.Goal, error) {
+	if m.GetGoalsFn != nil {
+		return m.GetGoalsFn(ctx)
+	}
+	if m.GetGoalsErr != nil {
+		return nil, m.GetGoalsErr
+	}
+	return m.GetGoalsResult, nil
+}
+
+func (m *MockService) GetGoal(ctx context.Context, id string) (*models.Goal, error) {
+	if m.GetGoalFn != nil {
+		return m.GetGoalFn(ctx, id)
+	}
+	if m.GetGoalErr != nil {
+		return nil, m.GetGoalErr
+	}
+	if m.GetGoalResult != nil {
+		return m.GetGoalResult, nil
+	}
+	return &models.Goal{ID: id}, nil
+}
+
+func (m *MockService) UpdateGoal(ctx context.Context, id string, req *models.UpdateGoalRequest) error {
+	if m.UpdateGoalFn != nil {
+		return m.UpdateGoalFn(ctx, id, req)
+	}
+	return m.UpdateGoalErr
+}
+
+func (m *MockService) DeleteGoal(ctx context.Context, id string) error {
+	if m.DeleteGoalFn != nil {
+		return m.DeleteGoalFn(ctx, id)
+	}
+	return m.DeleteGoalErr
+}
+
+func (m *MockService) AddGoalProgress(ctx context.Context, id string, amount float64) error {
+	if m.AddGoalProgressFn != nil {
+		return m.AddGoalProgressFn(ctx, id, amount)
+	}
+	return m.AddGoalProgressErr
 }
