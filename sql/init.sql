@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS records (
   type TEXT NOT NULL CHECK (type IN ('income', 'expense', 'transfer')),
   note TEXT,
   balance REAL NOT NULL,
+  "createdAt" INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
   FOREIGN KEY ("categoryID") REFERENCES categories("ID") ON DELETE SET NULL
 );
 
