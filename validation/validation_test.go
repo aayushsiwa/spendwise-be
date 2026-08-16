@@ -7,15 +7,6 @@ import (
 	"aayushsiwa/expense-tracker/models"
 )
 
-// Helper functions for creating pointers to literals
-func strPtr(s string) *string {
-	return &s
-}
-
-func float64Ptr(f float64) *float64 {
-	return &f
-}
-
 func TestNewValidator(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -538,52 +529,52 @@ func TestValidateUpdateGoal(t *testing.T) {
 		},
 		{
 			name:     "empty name",
-			req:      &models.UpdateGoalRequest{Name: strPtr("")},
+			req:      &models.UpdateGoalRequest{Name: new("")},
 			wantErrs: 1,
 		},
 		{
 			name:     "negative target amount",
-			req:      &models.UpdateGoalRequest{TargetAmount: float64Ptr(-1)},
+			req:      &models.UpdateGoalRequest{TargetAmount: new(float64(-1))},
 			wantErrs: 1,
 		},
 		{
 			name:     "zero target amount",
-			req:      &models.UpdateGoalRequest{TargetAmount: float64Ptr(0)},
+			req:      &models.UpdateGoalRequest{TargetAmount: new(float64(0))},
 			wantErrs: 1,
 		},
 		{
 			name:     "valid target amount",
-			req:      &models.UpdateGoalRequest{TargetAmount: float64Ptr(100)},
+			req:      &models.UpdateGoalRequest{TargetAmount: new(float64(100))},
 			wantErrs: 0,
 		},
 		{
 			name:     "negative current amount",
-			req:      &models.UpdateGoalRequest{CurrentAmount: float64Ptr(-1)},
+			req:      &models.UpdateGoalRequest{CurrentAmount: new(float64(-1))},
 			wantErrs: 1,
 		},
 		{
 			name:     "positive current amount",
-			req:      &models.UpdateGoalRequest{CurrentAmount: float64Ptr(50)},
+			req:      &models.UpdateGoalRequest{CurrentAmount: new(float64(50))},
 			wantErrs: 0,
 		},
 		{
 			name:     "invalid status",
-			req:      &models.UpdateGoalRequest{Status: strPtr("invalid")},
+			req:      &models.UpdateGoalRequest{Status: new("invalid")},
 			wantErrs: 1,
 		},
 		{
 			name:     "valid status",
-			req:      &models.UpdateGoalRequest{Status: strPtr("achieved")},
+			req:      &models.UpdateGoalRequest{Status: new("achieved")},
 			wantErrs: 0,
 		},
 		{
 			name:     "invalid target date",
-			req:      &models.UpdateGoalRequest{TargetDate: strPtr("bad-date")},
+			req:      &models.UpdateGoalRequest{TargetDate: new("bad-date")},
 			wantErrs: 1,
 		},
 		{
 			name:     "valid target date",
-			req:      &models.UpdateGoalRequest{TargetDate: strPtr("2025-12-31")},
+			req:      &models.UpdateGoalRequest{TargetDate: new("2025-12-31")},
 			wantErrs: 0,
 		},
 		{
@@ -604,19 +595,19 @@ func TestValidateUpdateGoal(t *testing.T) {
 		},
 		{
 			name:     "valid name update",
-			req:      &models.UpdateGoalRequest{Name: strPtr("New name")},
+			req:      &models.UpdateGoalRequest{Name: new("New name")},
 			wantErrs: 0,
 		},
 		{
 			name: "valid all fields",
 			req: &models.UpdateGoalRequest{
-				Name:                strPtr("Save"),
-				TargetAmount:        float64Ptr(5000),
-				CurrentAmount:       float64Ptr(100),
-				TargetDate:          strPtr("2025-12-31"),
-				Status:              strPtr("active"),
-				Description:         strPtr("desc"),
-				MonthlyContribution: float64Ptr(200),
+				Name:                new("Save"),
+				TargetAmount:        new(float64(5000)),
+				CurrentAmount:       new(float64(100)),
+				TargetDate:          new("2025-12-31"),
+				Status:              new("active"),
+				Description:         new("desc"),
+				MonthlyContribution: new(float64(200)),
 			},
 			wantErrs: 0,
 		},
