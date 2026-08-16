@@ -6,7 +6,7 @@ import (
 	"runtime/debug"
 	"time"
 
-	"aayushsiwa/expense-tracker/errors"
+	"aayushsiwa/spendwise-be/errors"
 
 	"github.com/gin-gonic/gin"
 )

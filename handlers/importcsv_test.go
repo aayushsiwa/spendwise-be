@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"aayushsiwa/expense-tracker/mocks"
-	"aayushsiwa/expense-tracker/services"
+	"aayushsiwa/spendwise-be/mocks"
+	"aayushsiwa/spendwise-be/services"
 
 	"github.com/gin-gonic/gin"
 )

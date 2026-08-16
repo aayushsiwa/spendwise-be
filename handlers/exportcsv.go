@@ -4,7 +4,7 @@ import (
 	"encoding/csv"
 	"strconv"
 
-	"aayushsiwa/expense-tracker/errors"
+	"aayushsiwa/spendwise-be/errors"
 
 	"github.com/gin-gonic/gin"
 )

@@ -4,7 +4,7 @@ import (
 	"context"
 	"log/slog"
 
-	"aayushsiwa/expense-tracker/errors"
+	"aayushsiwa/spendwise-be/errors"
 
 	"gorm.io/gorm"
 )

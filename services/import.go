@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"strings"
 
-	apperrors "aayushsiwa/expense-tracker/errors"
-	"aayushsiwa/expense-tracker/models"
-	"aayushsiwa/expense-tracker/utils"
+	apperrors "aayushsiwa/spendwise-be/errors"
+	"aayushsiwa/spendwise-be/models"
+	"aayushsiwa/spendwise-be/utils"
 
 	"github.com/lithammer/shortuuid/v4"
 	"gorm.io/gorm"

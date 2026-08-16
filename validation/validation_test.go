@@ -3,8 +3,8 @@ package validation
 import (
 	"testing"
 
-	"aayushsiwa/expense-tracker/errors"
-	"aayushsiwa/expense-tracker/models"
+	"aayushsiwa/spendwise-be/errors"
+	"aayushsiwa/spendwise-be/models"
 )
 
 func TestNewValidator(t *testing.T) {
