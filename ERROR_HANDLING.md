@@ -82,11 +82,6 @@ type ValidationError struct {
 - **Status Code**: 400
 - **Use Case**: Malformed JSON, invalid parameters
 
-### Encryption Errors
-- **Type**: `encryption_error`
-- **Status Code**: 500
-- **Use Case**: Encryption/decryption failures
-
 ### Conflict Errors
 - **Type**: `conflict`
 - **Status Code**: 409

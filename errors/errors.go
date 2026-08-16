@@ -21,7 +21,6 @@ var (
 	ErrInvalidInput = errors.New("invalid input")
 	ErrNotFound     = errors.New("not found")
 	ErrDatabase     = errors.New("database error")
-	ErrEncryption   = errors.New("encryption error")
 	ErrValidation   = errors.New("validation error")
 	ErrInternal     = errors.New("internal server error")
 	ErrUnauthorized = errors.New("unauthorized")
@@ -105,10 +104,6 @@ func NewNotFound(message string, err error) *AppError {
 
 func NewDatabase(message string, err error) *AppError {
 	return New("database_error", message, http.StatusInternalServerError, err)
-}
-
-func NewEncryption(message string, err error) *AppError {
-	return New("encryption_error", message, http.StatusInternalServerError, err)
 }
 
 func NewValidation(message string, details map[string]any) *AppError {

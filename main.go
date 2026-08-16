@@ -12,7 +12,6 @@ import (
 	"aayushsiwa/spendwise-be/handlers"
 	"aayushsiwa/spendwise-be/middleware"
 	"aayushsiwa/spendwise-be/routes"
-	"aayushsiwa/spendwise-be/secure"
 	"aayushsiwa/spendwise-be/services"
 
 	"github.com/gin-contrib/cors"
@@ -40,11 +39,6 @@ func main() {
 	cfg, err := config.Load()
 	if err != nil {
 		slog.ErrorContext(context.Background(), "Configuration error", "error", err)
-		os.Exit(1)
-	}
-
-	if err := secure.SetKey([]byte(cfg.EncryptionKey)); err != nil {
-		slog.ErrorContext(context.Background(), "Failed to set encryption key", "error", err)
 		os.Exit(1)
 	}
 
