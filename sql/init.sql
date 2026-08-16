@@ -14,6 +14,9 @@ CREATE TABLE IF NOT EXISTS records (
   type TEXT NOT NULL CHECK (type IN ('income', 'expense', 'transfer')),
   note TEXT,
   balance REAL NOT NULL,
+  -- createdAt: Unix timestamp in seconds. For new records, the application sets milliseconds via BeforeCreate hook.
+  -- The DEFAULT here provides a fallback for direct SQL inserts and ensures existing rows get a reasonable
+  -- creation timestamp (current time at migration) if this column is added to an existing table.
   "createdAt" INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
   FOREIGN KEY ("categoryID") REFERENCES categories("ID") ON DELETE SET NULL
 );

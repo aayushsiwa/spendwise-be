@@ -45,7 +45,7 @@ paths:
   # ---------------------------------------------------------------------------
   # System
   # ---------------------------------------------------------------------------
-  /health:
+  /api/v1/health:
     get:
       summary: Health check
       description: Returns service/database health.
@@ -401,7 +401,7 @@ paths:
   /api/v1/import/json:
     post:
       summary: Import records from JSON
-      description: Import an array of record objects. Each entry requires `date`, `description`, `category`, and `type`.
+      description: Import an array of record objects. Each entry requires `date`, `category`, and `amount`.
       tags: [Import/Export]
       requestBody:
         required: true
@@ -409,6 +409,7 @@ paths:
           application/json:
             schema:
               type: array
+              maxItems: 50000
               items:
                 $ref: "#/components/schemas/RecordInput"
             example:
@@ -1261,6 +1262,7 @@ components:
           type: number
           format: float
           minimum: 0
+          exclusiveMinimum: true
           description: Amount (must be > 0)
           example: 75.5
         type:
@@ -1440,6 +1442,7 @@ components:
           type: number
           format: float
           minimum: 0
+          exclusiveMinimum: true
           description: Budget amount (must be > 0)
           example: 600
 
@@ -1586,6 +1589,7 @@ components:
           type: number
           format: float
           minimum: 0
+          exclusiveMinimum: true
           description: Amount to add to current progress (must be > 0)
           example: 500
 
