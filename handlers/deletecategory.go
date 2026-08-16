@@ -4,8 +4,8 @@ import (
 	"log/slog"
 	"net/http"
 
-	"aayushsiwa/expense-tracker/errors"
-	"aayushsiwa/expense-tracker/validation"
+	"aayushsiwa/spendwise-be/errors"
+	"aayushsiwa/spendwise-be/validation"
 
 	"github.com/gin-gonic/gin"
 )

@@ -1,4 +1,4 @@
-module aayushsiwa/expense-tracker
+module aayushsiwa/spendwise-be
 
 go 1.26.0
 

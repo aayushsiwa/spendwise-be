@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"aayushsiwa/expense-tracker/mocks"
+	"aayushsiwa/spendwise-be/mocks"
 )
 
 func TestGenerateCustomID(t *testing.T) {

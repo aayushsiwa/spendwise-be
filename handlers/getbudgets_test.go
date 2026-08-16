@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	apperrors "aayushsiwa/expense-tracker/errors"
-	"aayushsiwa/expense-tracker/mocks"
-	"aayushsiwa/expense-tracker/models"
+	apperrors "aayushsiwa/spendwise-be/errors"
+	"aayushsiwa/spendwise-be/mocks"
+	"aayushsiwa/spendwise-be/models"
 
 	"github.com/gin-gonic/gin"
 )
