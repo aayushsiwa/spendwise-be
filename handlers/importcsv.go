@@ -4,8 +4,8 @@ import (
 	"errors"
 	"net/http"
 
-	apperrors "aayushsiwa/expense-tracker/errors"
-	"aayushsiwa/expense-tracker/services"
+	apperrors "aayushsiwa/spendwise-be/errors"
+	"aayushsiwa/spendwise-be/services"
 
 	"github.com/gin-gonic/gin"
 )

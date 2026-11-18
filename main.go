@@ -7,13 +7,12 @@ import (
 	"os/signal"
 	"syscall"
 
-	"aayushsiwa/expense-tracker/config"
-	"aayushsiwa/expense-tracker/db"
-	"aayushsiwa/expense-tracker/handlers"
-	"aayushsiwa/expense-tracker/middleware"
-	"aayushsiwa/expense-tracker/routes"
-	"aayushsiwa/expense-tracker/secure"
-	"aayushsiwa/expense-tracker/services"
+	"aayushsiwa/spendwise-be/config"
+	"aayushsiwa/spendwise-be/db"
+	"aayushsiwa/spendwise-be/handlers"
+	"aayushsiwa/spendwise-be/middleware"
+	"aayushsiwa/spendwise-be/routes"
+	"aayushsiwa/spendwise-be/services"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -40,11 +39,6 @@ func main() {
 	cfg, err := config.Load()
 	if err != nil {
 		slog.ErrorContext(context.Background(), "Configuration error", "error", err)
-		os.Exit(1)
-	}
-
-	if err := secure.SetKey([]byte(cfg.EncryptionKey)); err != nil {
-		slog.ErrorContext(context.Background(), "Failed to set encryption key", "error", err)
 		os.Exit(1)
 	}
 

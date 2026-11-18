@@ -1,9 +1,9 @@
 package handlers
 
 import (
-	appErrors "aayushsiwa/expense-tracker/errors"
-	"aayushsiwa/expense-tracker/models"
-	"aayushsiwa/expense-tracker/validation"
+	appErrors "aayushsiwa/spendwise-be/errors"
+	"aayushsiwa/spendwise-be/models"
+	"aayushsiwa/spendwise-be/validation"
 	"log/slog"
 	"net/http"
 

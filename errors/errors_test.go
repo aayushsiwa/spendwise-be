@@ -55,16 +55,6 @@ func TestNewDatabase(t *testing.T) {
 	}
 }
 
-func TestNewEncryption(t *testing.T) {
-	err := NewEncryption("crypto fail", errors.New("bad key"))
-	if err.Type != "encryption_error" {
-		t.Errorf("Type = %q, want %q", err.Type, "encryption_error")
-	}
-	if err.StatusCode != http.StatusInternalServerError {
-		t.Errorf("StatusCode = %d, want %d", err.StatusCode, http.StatusInternalServerError)
-	}
-}
-
 func TestNewValidation(t *testing.T) {
 	details := map[string]any{"field": "age"}
 	err := NewValidation("invalid", details)

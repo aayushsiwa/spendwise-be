@@ -4,8 +4,8 @@ import (
 	"context"
 	"strings"
 
-	"aayushsiwa/expense-tracker/errors"
-	"aayushsiwa/expense-tracker/models"
+	"aayushsiwa/spendwise-be/errors"
+	"aayushsiwa/spendwise-be/models"
 
 	"github.com/lithammer/shortuuid/v4"
 )

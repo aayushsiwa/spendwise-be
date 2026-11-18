@@ -4,8 +4,8 @@ import (
 	"context"
 	"io"
 
-	"aayushsiwa/expense-tracker/models"
-	"aayushsiwa/expense-tracker/services"
+	"aayushsiwa/spendwise-be/models"
+	"aayushsiwa/spendwise-be/services"
 
 	"github.com/gin-gonic/gin"
 )

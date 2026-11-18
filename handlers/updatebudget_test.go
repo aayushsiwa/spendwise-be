@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	apperrors "aayushsiwa/expense-tracker/errors"
-	"aayushsiwa/expense-tracker/mocks"
+	apperrors "aayushsiwa/spendwise-be/errors"
+	"aayushsiwa/spendwise-be/mocks"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"

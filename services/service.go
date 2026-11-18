@@ -4,7 +4,7 @@ import (
 	"context"
 	"io"
 
-	"aayushsiwa/expense-tracker/models"
+	"aayushsiwa/spendwise-be/models"
 
 	"gorm.io/gorm"
 )

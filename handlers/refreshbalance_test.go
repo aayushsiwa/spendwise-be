@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"aayushsiwa/expense-tracker/mocks"
+	"aayushsiwa/spendwise-be/mocks"
 
 	"github.com/gin-gonic/gin"
 )

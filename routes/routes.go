@@ -1,8 +1,8 @@
 package routes
 
 import (
-	"aayushsiwa/expense-tracker/db"
-	"aayushsiwa/expense-tracker/handlers"
+	"aayushsiwa/spendwise-be/db"
+	"aayushsiwa/spendwise-be/handlers"
 
 	"github.com/gin-gonic/gin"
 )

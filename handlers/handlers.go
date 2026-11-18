@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"aayushsiwa/expense-tracker/services"
+	"aayushsiwa/spendwise-be/services"
 	"mime/multipart"
 
 	"github.com/lithammer/shortuuid/v4"

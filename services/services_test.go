@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	apperrors "aayushsiwa/expense-tracker/errors"
-	"aayushsiwa/expense-tracker/models"
+	apperrors "aayushsiwa/spendwise-be/errors"
+	"aayushsiwa/spendwise-be/models"
 
 	"github.com/lithammer/shortuuid/v4"
 	"gorm.io/driver/sqlite"

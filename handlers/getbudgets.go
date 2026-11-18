@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	appErrors "aayushsiwa/expense-tracker/errors"
+	appErrors "aayushsiwa/spendwise-be/errors"
 
 	"github.com/gin-gonic/gin"
 )

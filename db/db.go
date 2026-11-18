@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"time"
 
-	"aayushsiwa/expense-tracker/models"
+	"aayushsiwa/spendwise-be/models"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"

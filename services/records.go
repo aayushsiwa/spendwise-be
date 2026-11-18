@@ -7,8 +7,8 @@ import (
 	"log/slog"
 	"strings"
 
-	apperrors "aayushsiwa/expense-tracker/errors"
-	"aayushsiwa/expense-tracker/models"
+	apperrors "aayushsiwa/spendwise-be/errors"
+	"aayushsiwa/spendwise-be/models"
 
 	"gorm.io/gorm"
 )

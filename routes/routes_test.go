@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"aayushsiwa/expense-tracker/db"
+	"aayushsiwa/spendwise-be/db"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/sqlite"

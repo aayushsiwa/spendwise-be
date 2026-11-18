@@ -1,5 +1,11 @@
 package models
 
+import (
+	"time"
+
+	"gorm.io/gorm"
+)
+
 type RecordType string
 
 const (
@@ -18,10 +24,16 @@ type Record struct {
 	Type        RecordType `gorm:"column:type;not null" json:"type"`
 	Note        string     `gorm:"column:note" json:"note"`
 	Balance     float64    `gorm:"column:balance;not null" json:"balance"`
+	CreatedAt   int64      `gorm:"column:createdAt;not null;default:0" json:"createdAt"`
 }
 
 func (Record) TableName() string {
 	return "records"
+}
+
+func (r *Record) BeforeCreate(tx *gorm.DB) error {
+	r.CreatedAt = time.Now().UnixMilli()
+	return nil
 }
 
 type RecordsResponse struct {

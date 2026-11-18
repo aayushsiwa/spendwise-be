@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"aayushsiwa/expense-tracker/errors"
-	"aayushsiwa/expense-tracker/models"
-	"aayushsiwa/expense-tracker/utils"
+	"aayushsiwa/spendwise-be/errors"
+	"aayushsiwa/spendwise-be/models"
+	"aayushsiwa/spendwise-be/utils"
 
 	"gorm.io/gorm"
 )

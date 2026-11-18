@@ -4,7 +4,7 @@ import (
 	"context"
 	"log/slog"
 
-	"aayushsiwa/expense-tracker/errors"
+	"aayushsiwa/spendwise-be/errors"
 
 	"gorm.io/gorm"
 )
@@ -31,7 +31,7 @@ func (s *RecordService) RefreshBalances(ctx context.Context) error {
 // recalculateBalances updates all records' balance values to cumulative running totals in a single query.
 func recalculateBalances(ctx context.Context, tx *gorm.DB) error {
 	// Get the database dialect name
-	dialect := tx.Dialector.Name()
+	dialect := tx.Name()
 
 	var query string
 
